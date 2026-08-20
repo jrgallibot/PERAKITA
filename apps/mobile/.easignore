@@ -1,3 +1,10 @@
+# EAS uses this instead of .gitignore — keep aligned with repo ignores.
+# Never upload local native projects (Windows SDK paths, stale Gradle config).
+android/
+ios/
+**/local.properties
+
+# Repo-wide (archive root is the monorepo)
 node_modules/
 .expo/
 dist/
@@ -23,11 +30,11 @@ coverage/
 .vercel
 supabase/.temp/
 *.log
-# This repo uses pnpm — stray npm/yarn lockfiles break EAS monorepo installs
 package-lock.json
 yarn.lock
 npm-shrinkwrap.json
-# Native projects are generated on EAS via prebuild (CNG). Keep local copies off the upload.
-apps/mobile/android/
-apps/mobile/ios/
-**/local.properties
+
+# Mobile-only
+.kotlin/
+*.tsbuildinfo
+expo-env.d.ts
