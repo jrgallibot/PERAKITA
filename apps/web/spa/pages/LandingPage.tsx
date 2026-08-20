@@ -5,6 +5,10 @@ import { Link } from 'react-router-dom';
 import {
   APP_ABOUT,
   APP_ABOUT_POINTS,
+  APP_ANDROID_APK_BLURB,
+  APP_ANDROID_APK_FILENAME,
+  APP_ANDROID_APK_LABEL,
+  APP_ANDROID_APK_PATH,
   APP_CONCEPT,
   APP_CONCEPT_TITLE,
   APP_CREDIT,
@@ -183,12 +187,13 @@ export function LandingPage() {
               >
                 {primaryLabel}
               </Link>
-              <Link
+              <a
                 className="inline-flex items-center justify-center rounded-xl border border-white/35 bg-white/5 px-6 py-3.5 text-[15px] font-semibold text-white backdrop-blur-sm transition hover:bg-white/10"
-                to={secondaryHref}
+                download={APP_ANDROID_APK_FILENAME}
+                href={APP_ANDROID_APK_PATH}
               >
-                {secondaryLabel}
-              </Link>
+                Download Android APK
+              </a>
             </div>
           </div>
           <div className="landing-hero-visual relative mx-auto w-full max-w-lg lg:max-w-none">
@@ -236,10 +241,7 @@ export function LandingPage() {
           <h2 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight sm:text-4xl">
             Get PeraKita on Android
           </h2>
-          <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">
-            Install the mobile app for offline-first pesos, budgets, and kinsena loans — then sync to this
-            web dashboard with the same account.
-          </p>
+          <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">{APP_ANDROID_APK_BLURB}</p>
 
           <div className="mt-12 flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:gap-10">
             <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[22px] bg-primary shadow-lg shadow-teal-900/20">
@@ -256,22 +258,28 @@ export function LandingPage() {
               <p className="font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-tight">
                 {APP_NAME}
               </p>
-              <p className="mt-1 text-sm font-semibold text-primary">Android APK · Direct install</p>
+              <p className="mt-1 text-sm font-semibold text-primary">{APP_ANDROID_APK_LABEL}</p>
               <ul className="mt-4 space-y-2 text-[15px] leading-6 text-[var(--muted)]">
+                <li>• Supabase sign-in built in (same account as the web)</li>
                 <li>• Track income, expenses, and Current Balance offline</li>
                 <li>• Budgets and kinsena-style loans on your phone</li>
-                <li>• Sync to the web when you reconnect</li>
-                <li>• Same email sign-in as this site</li>
+                <li>• Sync to this dashboard when you reconnect</li>
               </ul>
               <div className="mt-6 flex flex-wrap items-center gap-3">
                 <a
                   className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3.5 text-[15px] font-bold text-white transition hover:bg-teal-700"
-                  download="PeraKita.apk"
-                  href="/downloads/perakita.apk"
+                  download={APP_ANDROID_APK_FILENAME}
+                  href={APP_ANDROID_APK_PATH}
                 >
                   Download APK
                 </a>
-                <p className="text-xs text-[var(--muted)] sm:max-w-xs">
+                <Link
+                  className="inline-flex items-center justify-center rounded-xl border border-[var(--border)] px-6 py-3.5 text-[15px] font-semibold text-[var(--foreground)] transition hover:border-primary hover:text-primary"
+                  to={secondaryHref}
+                >
+                  {secondaryLabel}
+                </Link>
+                <p className="basis-full text-xs text-[var(--muted)] sm:basis-auto sm:max-w-xs">
                   Android may ask you to allow installs from this browser. Open the file after download to
                   install.
                 </p>
@@ -326,21 +334,22 @@ export function LandingPage() {
             Start knowing where your money goes
           </h2>
           <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-teal-100/90">
-            Create an account for the web dashboard, or sign in if you already sync from the mobile app.
+            Download the Android app for offline tracking, or open the web dashboard with the same account.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
+            <a
               className="inline-flex rounded-xl bg-white px-6 py-3.5 text-[15px] font-bold text-teal-900 transition hover:bg-teal-50"
+              download={APP_ANDROID_APK_FILENAME}
+              href={APP_ANDROID_APK_PATH}
+            >
+              Download Android APK
+            </a>
+            <Link
+              className="inline-flex rounded-xl border border-white/35 px-6 py-3.5 text-[15px] font-semibold text-white transition hover:bg-white/10"
               to={primaryHref}
             >
               {primaryLabel}
             </Link>
-            <a
-              className="inline-flex rounded-xl border border-white/35 px-6 py-3.5 text-[15px] font-semibold text-white transition hover:bg-white/10"
-              href="#concept"
-            >
-              Read the concept
-            </a>
           </div>
         </div>
       </section>

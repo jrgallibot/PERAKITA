@@ -14,6 +14,13 @@ export const APP_ABOUT_POINTS = [
 
 export const APP_CREDIT = `Created and developed by ${APP_DEVELOPER}`;
 
+/** Android APK hosted on the web app (apps/web/public/downloads). */
+export const APP_ANDROID_APK_PATH = '/downloads/perakita.apk';
+export const APP_ANDROID_APK_FILENAME = 'PeraKita.apk';
+export const APP_ANDROID_APK_LABEL = 'Android APK · Latest build';
+export const APP_ANDROID_APK_BLURB =
+  'Install on Android for offline-first pesos, budgets, and kinsena loans. Sign in with the same account to sync with the web dashboard.';
+
 /** Landing / marketing copy */
 export const APP_CONCEPT_TITLE = 'Built for how money actually moves';
 export const APP_CONCEPT =
@@ -58,6 +65,10 @@ export const APP_FAQ = [
   {
     q: 'Is my data private?',
     a: 'Your ledger starts on your device. Cloud sync uses your authenticated account so only you can access your synced finance data.',
+  },
+  {
+    q: 'How do I install the Android app?',
+    a: 'On the homepage, tap Download APK. Open the file when it finishes. Android may ask you to allow installs from your browser — turn that on, then install. Sign in with the same email you use on the web.',
   },
   {
     q: 'Who built PeraKita?',
