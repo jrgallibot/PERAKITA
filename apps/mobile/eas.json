@@ -8,7 +8,9 @@
       "node": "22.14.0",
       "pnpm": "11.22.0",
       "env": {
-        "EXPO_PUBLIC_WEB_APP_URL": "https://perakita-web.vercel.app"
+        "EXPO_PUBLIC_WEB_APP_URL": "https://perakita-web.vercel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ogfzkilwzkoewvshqkdq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nZnpraWx3emtvZXd2c2hxa2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwOTk2ODYsImV4cCI6MjEwMjY3NTY4Nn0.GRlJmZMPscXemES99dnEivGTQmSpTh_kgcKhQ2kZf3Q"
       }
     },
     "development": {
