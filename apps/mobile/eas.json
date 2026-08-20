@@ -5,7 +5,7 @@
   },
   "build": {
     "base": {
-      "corepack": true,
+      "node": "22.14.0",
       "pnpm": "11.22.0",
       "env": {
         "EXPO_PUBLIC_WEB_APP_URL": "https://perakita-web.vercel.app"
