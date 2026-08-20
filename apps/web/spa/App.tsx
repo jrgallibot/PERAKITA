@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/spa/AuthProvider';
 import { GuestRoute, ProtectedRoute } from '@/spa/RouteGuards';
+import { LandingPage } from '@/spa/pages/LandingPage';
 import { LoginPage } from '@/spa/pages/LoginPage';
 import { RegisterPage } from '@/spa/pages/RegisterPage';
 import { ForgotPasswordPage } from '@/spa/pages/ForgotPasswordPage';
@@ -37,7 +38,7 @@ export function SpaApp() {
         <AuthProvider>
           <ToastProvider>
             <Routes>
-              <Route element={<Navigate replace to="/login" />} path="/" />
+              <Route element={<LandingPage />} path="/" />
               <Route
                 element={
                   <GuestRoute>
@@ -87,7 +88,7 @@ export function SpaApp() {
                 }
                 path="/settings"
               />
-              <Route element={<Navigate replace to="/login" />} path="*" />
+              <Route element={<Navigate replace to="/" />} path="*" />
             </Routes>
           </ToastProvider>
         </AuthProvider>

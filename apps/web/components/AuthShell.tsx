@@ -1,5 +1,6 @@
 'use client';
 
+import { Link } from 'react-router-dom';
 import { APP_ABOUT, APP_CREDIT, APP_NAME, APP_TAGLINE } from '@perakita/shared';
 import { BrandLogo } from '@/components/BrandLogo';
 
@@ -19,10 +20,10 @@ export function AuthShell({
         <div className="pointer-events-none absolute -right-16 bottom-10 h-80 w-80 rounded-full bg-cyan-300/20 blur-3xl" />
 
         <div className="relative z-10">
-          <div className="mb-16 flex items-center gap-3">
+          <Link className="mb-16 flex items-center gap-3" to="/">
             <BrandLogo size={48} />
             <span className="text-xl font-bold tracking-tight">{APP_NAME}</span>
-          </div>
+          </Link>
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-100">
             Personal finance
           </p>
@@ -50,10 +51,10 @@ export function AuthShell({
       <main className="relative flex min-h-dvh items-start justify-center bg-[var(--background)] px-4 py-8 sm:items-center sm:px-6">
         <div className="w-full max-w-[440px] pt-10 sm:pt-0">
           <div className="mb-8 lg:hidden">
-            <div className="mb-4 flex items-center gap-3">
+            <Link className="mb-4 flex items-center gap-3" to="/">
               <BrandLogo size={44} />
               <span className="text-xl font-bold">{APP_NAME}</span>
-            </div>
+            </Link>
             <p className="text-sm text-[var(--muted)]">{APP_TAGLINE}</p>
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-[var(--foreground)] sm:text-3xl">

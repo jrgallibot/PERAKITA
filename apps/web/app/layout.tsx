@@ -3,8 +3,8 @@ import './globals.css';
 import { APP_CREDIT, APP_NAME, APP_TAGLINE } from '@perakita/shared';
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} — Personal Finance`,
-  description: `${APP_TAGLINE} ${APP_CREDIT}`,
+  title: `${APP_NAME} — Know where your money goes`,
+  description: `${APP_TAGLINE} Offline-first personal finance for Filipino money habits. ${APP_CREDIT}`,
   icons: { icon: '/logo.svg' },
 };
 
@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link href="https://fonts.googleapis.com" rel="preconnect" />
         <link crossOrigin="" href="https://fonts.gstatic.com" rel="preconnect" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap"
           rel="stylesheet"
         />
       </head>
