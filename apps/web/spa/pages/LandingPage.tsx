@@ -134,6 +134,9 @@ export function LandingPage() {
             <a className="transition hover:text-white" href="#workflow">
               Workflow
             </a>
+            <a className="transition hover:text-white" href="#download">
+              Download
+            </a>
             <a className="transition hover:text-white" href="#about">
               About
             </a>
@@ -227,7 +230,58 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-section border-y border-[var(--border)] bg-[var(--surface)]" id="about">
+      <section className="landing-section border-b border-[var(--border)] bg-[var(--surface)]" id="download">
+        <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">Download</p>
+          <h2 className="mt-4 max-w-2xl font-[family-name:var(--font-display)] text-3xl font-extrabold tracking-tight sm:text-4xl">
+            Get PeraKita on Android
+          </h2>
+          <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">
+            Install the mobile app for offline-first pesos, budgets, and kinsena loans — then sync to this
+            web dashboard with the same account.
+          </p>
+
+          <div className="mt-12 flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:gap-10">
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[22px] bg-primary shadow-lg shadow-teal-900/20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="PeraKita Android app"
+                className="h-full w-full object-cover"
+                height={96}
+                src="/downloads/perakita-icon.png"
+                width={96}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-[family-name:var(--font-display)] text-2xl font-extrabold tracking-tight">
+                {APP_NAME}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-primary">Android APK · Direct install</p>
+              <ul className="mt-4 space-y-2 text-[15px] leading-6 text-[var(--muted)]">
+                <li>• Track income, expenses, and Current Balance offline</li>
+                <li>• Budgets and kinsena-style loans on your phone</li>
+                <li>• Sync to the web when you reconnect</li>
+                <li>• Same email sign-in as this site</li>
+              </ul>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <a
+                  className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-3.5 text-[15px] font-bold text-white transition hover:bg-teal-700"
+                  download="PeraKita.apk"
+                  href="/downloads/perakita.apk"
+                >
+                  Download APK
+                </a>
+                <p className="text-xs text-[var(--muted)] sm:max-w-xs">
+                  Android may ask you to allow installs from this browser. Open the file after download to
+                  install.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section border-t border-[var(--border)]" id="about">
         <div className="mx-auto grid max-w-6xl gap-12 px-5 py-20 sm:px-8 sm:py-28 lg:grid-cols-[1fr_1fr] lg:items-start lg:gap-20">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">About</p>

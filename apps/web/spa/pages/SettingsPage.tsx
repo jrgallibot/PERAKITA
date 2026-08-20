@@ -21,12 +21,14 @@ import { AppHeader } from '@/components/AppHeader';
 import { useToast } from '@/components/Toast';
 import { useWebTheme } from '@/components/ThemeProvider';
 import { useAuth } from '@/spa/AuthProvider';
+import { clearWebFinanceData, resetWebCurrentBalance } from '@/lib/finance';
 import {
   changePassword,
   ensureProfile,
   updateProfile,
   uploadAvatar,
 } from '@/lib/profile';
+
 
 const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
   { label: 'System', value: 'system' },
@@ -51,6 +53,8 @@ export function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [resettingBalance, setResettingBalance] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
 
   const profileForm = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -157,6 +161,45 @@ export function SettingsPage() {
     .trim()
     .slice(0, 1)
     .toUpperCase();
+
+  const onResetBalance = async () => {
+    if (!user?.id || resettingBalance) return;
+    const confirmed = window.confirm(
+      'Reset Current Balance to ₱0? This deletes your income and expense records for this account. Loans and budgets stay.'
+    );
+    if (!confirmed) return;
+    setResettingBalance(true);
+    try {
+      await resetWebCurrentBalance(user.id);
+      notify.success('Current Balance reset to ₱0');
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Could not reset balance');
+    } finally {
+      setResettingBalance(false);
+    }
+  };
+
+  const onClearAllData = async () => {
+    if (!user?.id || clearingData) return;
+    const confirmed = window.confirm(
+      'Clear ALL your financial data? This permanently removes loans, budgets, expenses, income, and resets Current Balance for your account only.'
+    );
+    if (!confirmed) return;
+    const typed = window.prompt('Type CLEAR to confirm deleting all your loans, budgets, and expenses.');
+    if (typed !== 'CLEAR') {
+      if (typed != null) notify.info('Clear cancelled — type CLEAR exactly to confirm.');
+      return;
+    }
+    setClearingData(true);
+    try {
+      await clearWebFinanceData(user.id);
+      notify.success('All financial data cleared');
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : 'Could not clear data');
+    } finally {
+      setClearingData(false);
+    }
+  };
 
   return (
     <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
@@ -397,6 +440,41 @@ export function SettingsPage() {
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-[24px] border border-red-500/30 bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+          <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
+            Your data
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            These actions only affect your signed-in account. They soft-delete records in this session&apos;s
+            cloud data and cannot be undone from the app.
+          </p>
+          <div className="mt-4 space-y-3">
+            <button
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-semibold text-[var(--foreground)] disabled:opacity-60"
+              disabled={resettingBalance || clearingData}
+              onClick={() => void onResetBalance()}
+              type="button"
+            >
+              {resettingBalance ? 'Resetting…' : 'Reset Current Balance'}
+            </button>
+            <p className="text-xs text-[var(--muted)]">
+              Deletes income and expenses that make up Current Balance and sets payment modes to ₱0. Loans
+              and budgets are kept.
+            </p>
+            <button
+              className="w-full rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-300 disabled:opacity-60"
+              disabled={resettingBalance || clearingData}
+              onClick={() => void onClearAllData()}
+              type="button"
+            >
+              {clearingData ? 'Clearing…' : 'Clear all loans, budgets & expenses'}
+            </button>
+            <p className="text-xs text-[var(--muted)]">
+              Removes loans, budgets, expenses, income, and loan payments, then resets Current Balance.
+            </p>
           </div>
         </section>
 

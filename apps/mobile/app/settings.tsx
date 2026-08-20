@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Linking,
   Platform,
@@ -34,6 +35,7 @@ import {
   saveThemePreference,
   uploadAvatar,
 } from '@/services/settingsService';
+import { clearAllFinanceData, resetCurrentBalance } from '@/services/clearDataService';
 import { syncNow, getSyncDestinationLabel } from '@/services/syncService';
 import { notify } from '@/stores/toastStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -100,6 +102,8 @@ export default function SettingsScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const [resettingBalance, setResettingBalance] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
 
   const { data: logs = [] } = useQuery({
     queryKey: ['transactions', user?.id, 'settings-log'],
@@ -266,6 +270,106 @@ export default function SettingsScreen() {
         ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting to upload to ${getSyncDestinationLabel()}.`
         : `Phone and cloud are in sync. Open ${getSyncDestinationLabel()} (same account) to see your data.`;
 
+  const onResetBalance = () => {
+    if (!user?.id || resettingBalance || clearingData) return;
+    Alert.alert(
+      'Reset Current Balance',
+      'Set Current Balance to ₱0 for your account? This deletes income and expense records. Loans and budgets stay.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset balance',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setResettingBalance(true);
+              try {
+                await resetCurrentBalance(user.id);
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+                  queryClient.invalidateQueries({ queryKey: ['stats-dashboard'] }),
+                  queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+                  queryClient.invalidateQueries({ queryKey: ['accounts'] }),
+                  queryClient.invalidateQueries({ queryKey: ['budgets'] }),
+                ]);
+                if (isConnected) {
+                  try {
+                    await syncNow();
+                  } catch {
+                    // Local + cloud clear already attempted.
+                  }
+                }
+                notify.success('Current Balance reset to ₱0');
+              } catch (error) {
+                notify.error(error instanceof Error ? error.message : 'Could not reset balance');
+              } finally {
+                setResettingBalance(false);
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
+  const onClearAllData = () => {
+    if (!user?.id || resettingBalance || clearingData) return;
+    Alert.alert(
+      'Clear all your data',
+      'Removes loans, budgets, expenses, and income for your signed-in account only, and resets Current Balance. This cannot be undone from the app.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear everything',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirm clear',
+              'Delete all your loans, budgets, and expenses now?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, clear all',
+                  style: 'destructive',
+                  onPress: () => {
+                    void (async () => {
+                      setClearingData(true);
+                      try {
+                        await clearAllFinanceData(user.id);
+                        await Promise.all([
+                          queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+                          queryClient.invalidateQueries({ queryKey: ['stats-dashboard'] }),
+                          queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+                          queryClient.invalidateQueries({ queryKey: ['accounts'] }),
+                          queryClient.invalidateQueries({ queryKey: ['loans'] }),
+                          queryClient.invalidateQueries({ queryKey: ['loan'] }),
+                          queryClient.invalidateQueries({ queryKey: ['loan-payments'] }),
+                          queryClient.invalidateQueries({ queryKey: ['budgets'] }),
+                        ]);
+                        if (isConnected) {
+                          try {
+                            await syncNow();
+                          } catch {
+                            // Local + cloud clear already attempted.
+                          }
+                        }
+                        notify.success('All financial data cleared');
+                      } catch (error) {
+                        notify.error(error instanceof Error ? error.message : 'Could not clear data');
+                      } finally {
+                        setClearingData(false);
+                      }
+                    })();
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Screen>
       <View style={styles.brandRow}>
@@ -431,6 +535,36 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
+      </Card>
+
+      <Card style={[styles.section, { borderColor: colors.expense, borderWidth: 1 }]}>
+        <AppText muted variant="caption">
+          YOUR DATA
+        </AppText>
+        <AppText>
+          Only your signed-in account. Clears this phone and your cloud session when online.
+        </AppText>
+        <Button
+          disabled={resettingBalance || clearingData}
+          loading={resettingBalance}
+          onPress={onResetBalance}
+          title={resettingBalance ? 'Resetting…' : 'Reset Current Balance'}
+          variant="secondary"
+        />
+        <AppText muted variant="caption">
+          Deletes income and expenses that make up Current Balance and sets payment modes to ₱0. Loans
+          and budgets stay.
+        </AppText>
+        <Button
+          disabled={resettingBalance || clearingData}
+          loading={clearingData}
+          onPress={onClearAllData}
+          title={clearingData ? 'Clearing…' : 'Clear all loans, budgets & expenses'}
+          variant="danger"
+        />
+        <AppText muted variant="caption">
+          Removes loans, budgets, expenses, income, and loan payments, then resets Current Balance.
+        </AppText>
       </Card>
 
       <Card style={styles.section}>

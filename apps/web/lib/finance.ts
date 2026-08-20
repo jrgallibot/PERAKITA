@@ -835,4 +835,72 @@ export async function deleteWebIncome(tx: WebTransaction): Promise<void> {
   await adjustAccount(tx.account_id, -tx.amount);
 }
 
+async function resetUserAccountBalances(userId: string, now: string): Promise<void> {
+  const { error } = await supabase
+    .from('accounts')
+    .update({
+      current_balance: 0,
+      initial_balance: 0,
+      updated_at: now,
+      sync_status: 'updated',
+    })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (error) throw error;
+}
+
+/** Soft-delete income & expense rows and zero payment-mode balances. */
+export async function resetWebCurrentBalance(userId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('transactions')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .in('type', ['income', 'expense'])
+    .is('deleted_at', null);
+  if (error) throw error;
+  await resetUserAccountBalances(userId, now);
+}
+
+/** Soft-delete loans, budgets, expenses/income, and related payments; zero balances. */
+export async function clearWebFinanceData(userId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error: txError } = await supabase
+    .from('transactions')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (txError) throw txError;
+
+  const { error: paymentError } = await supabase
+    .from('loan_payments')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (paymentError) throw paymentError;
+
+  const { error: loanError } = await supabase
+    .from('loans')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (loanError) throw loanError;
+
+  const { error: budgetCatError } = await supabase
+    .from('budget_categories')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (budgetCatError) throw budgetCatError;
+
+  const { error: budgetError } = await supabase
+    .from('budgets')
+    .update({ deleted_at: now, updated_at: now, sync_status: 'deleted' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+  if (budgetError) throw budgetError;
+
+  await resetUserAccountBalances(userId, now);
+}
+
 export { formatCurrency };
