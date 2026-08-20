@@ -10,6 +10,7 @@ import {
   calculateLoanInterest,
   evaluateKinsenaPayment,
   formatCurrency,
+  getDueTodayLoanAlerts,
   sortPaymentAccounts,
   type BudgetStat,
   type DailyTrendPoint,
@@ -379,6 +380,7 @@ export type WebStatsDashboard = {
   loanDebts: number;
   loanReceivables: number;
   activeLoans: number;
+  dueToday: ReturnType<typeof getDueTodayLoanAlerts>;
 };
 
 export async function loadStatsDashboard(userId: string): Promise<WebStatsDashboard> {
@@ -441,7 +443,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
       .is('deleted_at', null),
     supabase
       .from('loans')
-      .select('remaining_amount, loan_type, status')
+      .select('id, person_name, remaining_amount, loan_type, status, due_date')
       .eq('user_id', userId)
       .is('deleted_at', null),
     supabase
@@ -520,6 +522,16 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
   const loanReceivables = activeLoans
     .filter((loan) => loan.loan_type === 'receivable')
     .reduce((sum, loan) => sum + num(loan.remaining_amount), 0);
+  const dueToday = getDueTodayLoanAlerts(
+    (loansRes.data ?? []).map((loan) => ({
+      id: String(loan.id),
+      person_name: String(loan.person_name ?? 'Loan'),
+      loan_type: (loan.loan_type === 'receivable' ? 'receivable' : 'debt') as 'debt' | 'receivable',
+      remaining_amount: num(loan.remaining_amount),
+      due_date: (loan.due_date as string | null) ?? null,
+      status: String(loan.status ?? 'active'),
+    }))
+  );
 
   return {
     balance,
@@ -541,6 +553,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
     loanDebts,
     loanReceivables,
     activeLoans: activeLoans.length,
+    dueToday,
   };
 }
 

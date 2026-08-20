@@ -36,10 +36,17 @@ export interface SyncMetadata {
   deleted_at: string | null;
 }
 
+export type Sex = 'male' | 'female' | 'other' | 'prefer_not_to_say';
+
 export interface Profile {
   id: string;
   user_id: string;
   display_name: string | null;
+  contact: string | null;
+  address: string | null;
+  birthday: string | null;
+  sex: Sex | null;
+  avatar_url: string | null;
   default_currency: string;
   created_at: string;
   updated_at: string;

@@ -117,6 +117,110 @@ export function nextKinsenaWindows(fromIso: string): KinsenaWindow[] {
   return kinsenaWindowsAround(fromIso).filter((window) => window.due >= fromIso).slice(0, 2);
 }
 
+/** Local calendar day as YYYY-MM-DD (not UTC). */
+export function todayIsoLocal(now = new Date()): string {
+  return toIsoDay(now);
+}
+
+export type DueTodayLoanAlert = {
+  id: string;
+  person_name: string;
+  loan_type: 'debt' | 'receivable';
+  remaining_amount: number;
+  reason: 'kinsena' | 'maturity' | 'overdue';
+  label: string;
+};
+
+export type DueTodayAlerts = {
+  today: string;
+  kinsena: KinsenaWindow | null;
+  items: DueTodayLoanAlert[];
+};
+
+function isOpenLoan(status: string): boolean {
+  return status !== 'paid' && status !== 'cancelled';
+}
+
+/**
+ * In-app due alerts for today:
+ * - Kinsena (15th / month-end): all open loans
+ * - Maturity: open loans whose due_date is today
+ * - Overdue: open loans whose due_date is before today
+ */
+export function getDueTodayLoanAlerts(
+  loans: Array<{
+    id: string;
+    person_name: string;
+    loan_type: 'debt' | 'receivable';
+    remaining_amount: number;
+    due_date: string | null;
+    status: string;
+  }>,
+  today = todayIsoLocal()
+): DueTodayAlerts {
+  const open = loans.filter(
+    (loan) => isOpenLoan(loan.status) && Number(loan.remaining_amount) > 0
+  );
+  const kinsena = kinsenaWindowsAround(today).find((window) => window.due === today) ?? null;
+  const byId = new Map<string, DueTodayLoanAlert>();
+
+  const push = (item: DueTodayLoanAlert) => {
+    const existing = byId.get(item.id);
+    if (!existing) {
+      byId.set(item.id, item);
+      return;
+    }
+    const rank = { overdue: 3, maturity: 2, kinsena: 1 } as const;
+    if (rank[item.reason] > rank[existing.reason]) {
+      byId.set(item.id, item);
+    }
+  };
+
+  for (const loan of open) {
+    const due = loan.due_date?.trim() || null;
+    if (due && due < today) {
+      push({
+        id: loan.id,
+        person_name: loan.person_name,
+        loan_type: loan.loan_type,
+        remaining_amount: loan.remaining_amount,
+        reason: 'overdue',
+        label: `Past due ${due}`,
+      });
+    } else if (due && due === today) {
+      push({
+        id: loan.id,
+        person_name: loan.person_name,
+        loan_type: loan.loan_type,
+        remaining_amount: loan.remaining_amount,
+        reason: 'maturity',
+        label: 'Matures today',
+      });
+    }
+  }
+
+  if (kinsena) {
+    for (const loan of open) {
+      push({
+        id: loan.id,
+        person_name: loan.person_name,
+        loan_type: loan.loan_type,
+        remaining_amount: loan.remaining_amount,
+        reason: 'kinsena',
+        label: `${kinsena.label} due today`,
+      });
+    }
+  }
+
+  const items = [...byId.values()].sort((a, b) => {
+    const rank = { overdue: 0, maturity: 1, kinsena: 2 };
+    if (rank[a.reason] !== rank[b.reason]) return rank[a.reason] - rank[b.reason];
+    return a.person_name.localeCompare(b.person_name);
+  });
+
+  return { today, kinsena, items };
+}
+
 /** Late after the 5-day allowance from the 15th or month-end. Penalty is remaining × rate%. */
 export function evaluateKinsenaPayment(
   paymentDate: string,

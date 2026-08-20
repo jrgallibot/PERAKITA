@@ -94,6 +94,62 @@ export function DashboardPage() {
           </p>
         ) : stats ? (
           <div className="mt-8 space-y-6">
+            {stats.dueToday.items.length > 0 ? (
+              <section
+                className={`rounded-[20px] border p-4 sm:p-5 ${
+                  stats.dueToday.items.some(
+                    (item) => item.reason === 'overdue' || item.reason === 'maturity'
+                  )
+                    ? 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40'
+                    : 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                      Due today
+                    </p>
+                    <h2 className="mt-1 text-lg font-bold">
+                      {stats.dueToday.items.length === 1
+                        ? '1 loan needs attention'
+                        : `${stats.dueToday.items.length} loans need attention`}
+                    </h2>
+                  </div>
+                  <Link
+                    className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white dark:text-slate-950"
+                    to="/manage"
+                  >
+                    Open loans
+                  </Link>
+                </div>
+                <ul className="mt-4 space-y-2">
+                  {stats.dueToday.items.slice(0, 5).map((item) => (
+                    <li
+                      className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)]/70 px-3 py-2 text-sm"
+                      key={item.id}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{item.person_name}</p>
+                        <p className="text-xs text-[var(--muted)]">
+                          {item.label}
+                          {item.loan_type === 'debt' ? ' · you owe' : ' · owed to you'}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 font-bold ${
+                          item.loan_type === 'debt'
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
+                        {fmt(item.remaining_amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
                 hint="Income minus expenses only"

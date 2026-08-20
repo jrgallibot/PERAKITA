@@ -2,6 +2,8 @@ node_modules/
 .expo/
 dist/
 .next/
+out/
+apps/web/out/
 .turbo/
 *.local
 .env

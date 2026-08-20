@@ -6,6 +6,8 @@ import { AuthProvider } from '@/spa/AuthProvider';
 import { GuestRoute, ProtectedRoute } from '@/spa/RouteGuards';
 import { LoginPage } from '@/spa/pages/LoginPage';
 import { RegisterPage } from '@/spa/pages/RegisterPage';
+import { ForgotPasswordPage } from '@/spa/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/spa/pages/ResetPasswordPage';
 import { DashboardPage } from '@/spa/pages/DashboardPage';
 import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
 import { SettingsPage } from '@/spa/pages/SettingsPage';
@@ -52,6 +54,15 @@ export function SpaApp() {
                 }
                 path="/register"
               />
+              <Route
+                element={
+                  <GuestRoute>
+                    <ForgotPasswordPage />
+                  </GuestRoute>
+                }
+                path="/forgot-password"
+              />
+              <Route element={<ResetPasswordPage />} path="/reset-password" />
               <Route
                 element={
                   <ProtectedRoute>

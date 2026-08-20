@@ -65,13 +65,18 @@ export function LoginPage() {
             <label className="text-sm font-semibold text-slate-600 dark:text-slate-300" htmlFor="password">
               Password
             </label>
-            <button
-              className="text-xs font-semibold text-primary"
-              onClick={() => setShowPassword((v) => !v)}
-              type="button"
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
+            <div className="flex items-center gap-3">
+              <Link className="text-xs font-semibold text-primary hover:underline" to="/forgot-password">
+                Forgot?
+              </Link>
+              <button
+                className="text-xs font-semibold text-primary"
+                onClick={() => setShowPassword((v) => !v)}
+                type="button"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
           <input
             id="password"

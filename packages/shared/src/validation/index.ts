@@ -36,6 +36,39 @@ export const resetPasswordSchema = z
     path: ['confirmPassword'],
   });
 
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password must be different from current password',
+    path: ['newPassword'],
+  });
+
+export const sexSchema = z.enum(['male', 'female', 'other', 'prefer_not_to_say']);
+
+export const profileSchema = z.object({
+  display_name: z
+    .string()
+    .trim()
+    .min(1, 'Full name is required')
+    .max(100, 'Full name is too long'),
+  contact: z.string().trim().max(40, 'Contact is too long').optional().or(z.literal('')),
+  address: z.string().trim().max(300, 'Address is too long').optional().or(z.literal('')),
+  birthday: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+    .optional()
+    .or(z.literal('')),
+  sex: sexSchema.optional().nullable(),
+});
+
 export const accountSchema = z.object({
   name: z.string().min(1, 'Account name is required').max(100),
   type: z.enum(['cash', 'ewallet', 'bank', 'savings', 'emergency', 'other']),
@@ -66,8 +99,25 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ProfileInput = z.infer<typeof profileSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type TransactionInput = z.infer<typeof transactionSchema>;
+
+/** Age in whole years from birthday ISO date, or null if invalid. */
+export function ageFromBirthday(birthday: string | null | undefined): number | null {
+  if (!birthday || !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return null;
+  const [y, m, d] = birthday.split('-').map(Number);
+  const birth = new Date(y, m - 1, d);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 && age < 150 ? age : null;
+}
 
 export function mapAuthError(message: string): string {
   const lower = message.toLowerCase();

@@ -32,6 +32,7 @@ Keep one `.env` at the **repo root**. Next.js and Expo load it from there — th
 |----------|---------|
 | `EXPO_PUBLIC_SUPABASE_URL` | Mobile |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Mobile |
+| `EXPO_PUBLIC_WEB_APP_URL` | Mobile (web dashboard link; default `https://perakita-web.vercel.app`) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Web |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Web |
 
