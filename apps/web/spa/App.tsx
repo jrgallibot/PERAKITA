@@ -10,6 +10,7 @@ import { DashboardPage } from '@/spa/pages/DashboardPage';
 import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
 import { SettingsPage } from '@/spa/pages/SettingsPage';
 import { ToastProvider } from '@/components/Toast';
+import { Providers } from '@/components/Providers';
 
 function Splash() {
   return (
@@ -29,55 +30,57 @@ export function SpaApp() {
   if (!ready) return <Splash />;
 
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <Routes>
-          <Route element={<Navigate replace to="/login" />} path="/" />
-          <Route
-            element={
-              <GuestRoute>
-                <LoginPage />
-              </GuestRoute>
-            }
-            path="/login"
-          />
-          <Route
-            element={
-              <GuestRoute>
-                <RegisterPage />
-              </GuestRoute>
-            }
-            path="/register"
-          />
-          <Route
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-            path="/dashboard"
-          />
-          <Route
-            element={
-              <ProtectedRoute>
-                <ManageFinancesPage />
-              </ProtectedRoute>
-            }
-            path="/manage"
-          />
-          <Route
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-            path="/settings"
-          />
-          <Route element={<Navigate replace to="/login" />} path="*" />
-          </Routes>
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <Providers>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <Routes>
+              <Route element={<Navigate replace to="/login" />} path="/" />
+              <Route
+                element={
+                  <GuestRoute>
+                    <LoginPage />
+                  </GuestRoute>
+                }
+                path="/login"
+              />
+              <Route
+                element={
+                  <GuestRoute>
+                    <RegisterPage />
+                  </GuestRoute>
+                }
+                path="/register"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <DashboardPage />
+                  </ProtectedRoute>
+                }
+                path="/dashboard"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <ManageFinancesPage />
+                  </ProtectedRoute>
+                }
+                path="/manage"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <SettingsPage />
+                  </ProtectedRoute>
+                }
+                path="/settings"
+              />
+              <Route element={<Navigate replace to="/login" />} path="*" />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </Providers>
   );
 }

@@ -7,3 +7,6 @@ minimumReleaseAgeExclude:
   - '@expo/cli@57.0.16'
   - '@expo/fingerprint@0.20.8'
   - expo-asset@57.0.12
+overrides:
+  react: 19.1.0
+  react-dom: 19.1.0

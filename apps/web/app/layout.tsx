@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { ThemeProvider } from '@/components/ThemeProvider';
-import { ThemeToggleFab } from '@/components/ThemeToggleFab';
 import { APP_CREDIT, APP_NAME, APP_TAGLINE } from '@perakita/shared';
 
 export const metadata: Metadata = {
@@ -26,12 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>
-        <ThemeProvider>
-          {children}
-          <ThemeToggleFab />
-        </ThemeProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
