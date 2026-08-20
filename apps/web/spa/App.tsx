@@ -1,0 +1,83 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { AuthProvider } from '@/spa/AuthProvider';
+import { GuestRoute, ProtectedRoute } from '@/spa/RouteGuards';
+import { LoginPage } from '@/spa/pages/LoginPage';
+import { RegisterPage } from '@/spa/pages/RegisterPage';
+import { DashboardPage } from '@/spa/pages/DashboardPage';
+import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
+import { SettingsPage } from '@/spa/pages/SettingsPage';
+import { ToastProvider } from '@/components/Toast';
+
+function Splash() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+      <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
+export function SpaApp() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  if (!ready) return <Splash />;
+
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <ToastProvider>
+          <Routes>
+          <Route element={<Navigate replace to="/login" />} path="/" />
+          <Route
+            element={
+              <GuestRoute>
+                <LoginPage />
+              </GuestRoute>
+            }
+            path="/login"
+          />
+          <Route
+            element={
+              <GuestRoute>
+                <RegisterPage />
+              </GuestRoute>
+            }
+            path="/register"
+          />
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+            path="/dashboard"
+          />
+          <Route
+            element={
+              <ProtectedRoute>
+                <ManageFinancesPage />
+              </ProtectedRoute>
+            }
+            path="/manage"
+          />
+          <Route
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+            path="/settings"
+          />
+          <Route element={<Navigate replace to="/login" />} path="*" />
+          </Routes>
+        </ToastProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

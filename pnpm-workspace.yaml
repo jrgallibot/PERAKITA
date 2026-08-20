@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  sharp: set this to true or false
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.16'
+  - '@expo/fingerprint@0.20.8'
+  - expo-asset@57.0.12

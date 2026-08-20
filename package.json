@@ -1,0 +1,14 @@
+{
+  "name": "perakita",
+  "private": true,
+  "scripts": {
+    "dev:mobile": "pnpm --filter @perakita/mobile dev",
+    "dev:web": "pnpm --filter @perakita/web dev",
+    "typecheck": "pnpm --filter @perakita/shared --filter @perakita/mobile --filter @perakita/web run typecheck",
+    "lint": "pnpm -r lint",
+    "email:build": "node scripts/build-email-templates.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

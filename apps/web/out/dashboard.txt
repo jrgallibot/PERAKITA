@@ -1,0 +1,17 @@
+1:"$Sreact.fragment"
+2:I[8391,["177","static/chunks/app/layout-a6f7083b8d3d0c8f.js"],"ThemeProvider"]
+3:I[9509,[],""]
+4:I[4881,[],""]
+5:I[1510,["973","static/chunks/7c2b7023-7d954be904e65d7a.js","714","static/chunks/81e6ba02-8f98917181e2422c.js","8","static/chunks/8-bd6ad5e66f69aae7.js","171","static/chunks/171-cf14036286ebc2e2.js","105","static/chunks/app/dashboard/page-74eae7b108573f47.js"],"SpaPage"]
+6:I[4552,[],"OutletBoundary"]
+8:I[6273,[],"AsyncMetadataOutlet"]
+a:I[4552,[],"ViewportBoundary"]
+c:I[4552,[],"MetadataBoundary"]
+d:"$Sreact.suspense"
+f:I[535,[],""]
+:HL["/_next/static/css/83e77b74ac5385c6.css","style"]
+0:{"P":null,"b":"WCaKhedUok3JpVDQ55hKd","p":"","c":["","dashboard"],"i":false,"f":[[["",{"children":["dashboard",{"children":["__PAGE__",{}]}]},"$undefined","$undefined",true],["",["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/83e77b74ac5385c6.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]],["$","html",null,{"lang":"en","suppressHydrationWarning":true,"children":["$","body",null,{"children":["$","$L2",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[["$","$L5",null,{}],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]}]]}],{"children":["dashboard",["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":["__PAGE__",["$","$1","c",{"children":[["$","$L5",null,{}],null,["$","$L6",null,{"children":["$L7",["$","$L8",null,{"promise":"$@9"}]]}]]}],{},null,false]},null,false]},null,false],["$","$1","h",{"children":[null,[["$","$La",null,{"children":"$Lb"}],null],["$","$Lc",null,{"children":["$","div",null,{"hidden":true,"children":["$","$d",null,{"fallback":null,"children":"$Le"}]}]}]]}],false]],"m":"$undefined","G":["$f",[]],"s":false,"S":true}
+b:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+7:null
+9:{"metadata":[["$","title","0",{"children":"PeraKita — Personal Finance Dashboard"}],["$","meta","1",{"name":"description","content":"Offline-first personal finance tracker"}]],"error":null,"digest":"$undefined"}
+e:"$9:metadata"
