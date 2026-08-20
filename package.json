@@ -2,6 +2,10 @@
   "name": "perakita",
   "private": true,
   "packageManager": "pnpm@11.22.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev:mobile": "pnpm --filter @perakita/mobile dev",
     "dev:web": "pnpm --filter @perakita/web dev",

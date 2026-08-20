@@ -23,3 +23,7 @@ coverage/
 .vercel
 supabase/.temp/
 *.log
+# This repo uses pnpm — stray npm/yarn lockfiles break EAS monorepo installs
+package-lock.json
+yarn.lock
+npm-shrinkwrap.json
