@@ -40,20 +40,20 @@ export const budgetRepository = {
       const spentRow = await db.getFirstAsync<{ total: number }>(
         `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
          WHERE user_id = ? AND deleted_at IS NULL AND type = 'expense'
-           AND transaction_date >= ? AND transaction_date <= ?`,
-        [userId, budget.period_start, budget.period_end]
+           AND budget_id = ?`,
+        [userId, budget.id]
       );
       const spent = spentRow?.total ?? 0;
       const cats = await db.getAllAsync<Record<string, unknown>>(
         `SELECT bc.*, c.name as name, c.color as color,
            (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
             WHERE t.user_id = bc.user_id AND t.deleted_at IS NULL AND t.type = 'expense'
-              AND t.category_id = bc.category_id
-              AND t.transaction_date >= ? AND t.transaction_date <= ?) as spent
+              AND t.budget_id = bc.budget_id
+              AND t.category_id = bc.category_id) as spent
          FROM budget_categories bc
          LEFT JOIN categories c ON c.id = bc.category_id
          WHERE bc.budget_id = ? AND bc.deleted_at IS NULL`,
-        [budget.period_start, budget.period_end, budget.id]
+        [budget.id]
       );
       budgets.push({
         ...budget,
@@ -79,6 +79,19 @@ export const budgetRepository = {
       });
     }
     return budgets;
+  },
+
+  /** Budgets whose period covers the given ISO date (for expense budget picker). */
+  async findActiveForDate(userId: string, date: string): Promise<Budget[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT * FROM budgets
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND period_start <= ? AND period_end >= ?
+       ORDER BY name COLLATE NOCASE ASC`,
+      [userId, date, date]
+    );
+    return rows.map(mapBudget);
   },
 
   async create(

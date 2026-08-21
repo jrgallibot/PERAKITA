@@ -38,6 +38,7 @@ export type WebTransaction = {
   notes: string | null;
   transaction_date: string;
   category_id: string | null;
+  budget_id: string | null;
   account_id: string;
   created_at?: string;
 };
@@ -232,7 +233,7 @@ export async function loadDashboard(userId: string) {
     supabase.from('categories').select('id, name, type').eq('user_id', userId).is('deleted_at', null).order('name'),
     supabase
       .from('transactions')
-      .select('id, type, amount, description, notes, transaction_date, category_id, account_id, created_at')
+      .select('id, type, amount, description, notes, transaction_date, category_id, budget_id, account_id, created_at')
       .eq('user_id', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -301,6 +302,7 @@ export async function loadDashboard(userId: string) {
     notes: (row.notes as string) ?? null,
     transaction_date: row.transaction_date as string,
     category_id: (row.category_id as string) ?? null,
+    budget_id: (row.budget_id as string) ?? null,
     account_id: row.account_id as string,
     created_at: (row.created_at as string) ?? undefined,
   }));
@@ -320,7 +322,7 @@ export async function loadDashboard(userId: string) {
 
   const expenseRes = await supabase
     .from('transactions')
-    .select('amount, transaction_date')
+    .select('amount, transaction_date, budget_id')
     .eq('user_id', userId)
     .eq('type', 'expense')
     .is('deleted_at', null);
@@ -331,7 +333,7 @@ export async function loadDashboard(userId: string) {
     const periodStart = row.period_start as string;
     const periodEnd = row.period_end as string;
     const spent = expenseRows
-      .filter((tx) => tx.transaction_date >= periodStart && tx.transaction_date <= periodEnd)
+      .filter((tx) => (tx.budget_id as string | null) === row.id)
       .reduce((sum, tx) => sum + num(tx.amount), 0);
     return {
       id: row.id as string,
@@ -437,7 +439,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
       .order('period_start', { ascending: false }),
     supabase
       .from('transactions')
-      .select('amount, transaction_date')
+      .select('amount, transaction_date, budget_id')
       .eq('user_id', userId)
       .eq('type', 'expense')
       .is('deleted_at', null),
@@ -501,10 +503,8 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
   const expenseRows = expenseRes.data ?? [];
   const budgets = buildBudgetStats(
     (budgetsRes.data ?? []).map((row) => {
-      const periodStart = row.period_start as string;
-      const periodEnd = row.period_end as string;
       const spent = expenseRows
-        .filter((tx) => tx.transaction_date >= periodStart && tx.transaction_date <= periodEnd)
+        .filter((tx) => (tx.budget_id as string | null) === row.id)
         .reduce((sum, tx) => sum + num(tx.amount), 0);
       return {
         id: row.id as string,
@@ -561,6 +561,7 @@ export async function createWebTransaction(input: {
   userId: string;
   accountId: string;
   categoryId: string | null;
+  budgetId?: string | null;
   type: 'income' | 'expense';
   amount: number;
   description: string;
@@ -582,6 +583,7 @@ export async function createWebTransaction(input: {
     user_id: input.userId,
     account_id: input.accountId,
     category_id: input.categoryId,
+    budget_id: input.type === 'expense' ? (input.budgetId ?? null) : null,
     type: input.type,
     amount: input.amount,
     description: input.description || input.type,

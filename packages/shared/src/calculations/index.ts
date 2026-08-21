@@ -344,6 +344,7 @@ export type BudgetSpendSummary = {
   description: string | null;
   spentToDate: number;
   remainingAfter: number;
+  planTotal: number;
   overBudget: boolean;
 };
 
@@ -379,6 +380,7 @@ export function budgetSpendTimeline(
       description: item.description?.trim() || null,
       spentToDate: spent,
       remainingAfter: Math.max(0, remaining),
+      planTotal: roundMoney(budget.total_amount),
       overBudget: spent > budget.total_amount,
     };
   });

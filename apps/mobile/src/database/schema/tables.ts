@@ -8,4 +8,5 @@ export const SQLITE_TABLES = [
   'transactions',
   'sync_queue',
   'app_settings',
+  'local_credentials',
 ] as const;

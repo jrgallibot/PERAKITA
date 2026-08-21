@@ -153,6 +153,7 @@ export default function BudgetsScreen() {
       await transactionRepository.create(user.id, {
         account_id: accountId,
         category_id: categoryId,
+        budget_id: budget.id,
         type: 'expense',
         amount: parsed,
         description: isOtherCategory(category?.name)
@@ -166,7 +167,7 @@ export default function BudgetsScreen() {
       setAmount('');
       setSpendNote('');
       await refresh();
-      notify.success('Spend saved and subtracted from budget');
+      notify.success('Spend logged — Current Balance updated; counts toward this budget plan');
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not record this spend.');
     } finally {
@@ -241,21 +242,17 @@ export default function BudgetsScreen() {
         <EmptyState
           actionLabel="Create a budget"
           icon="pie-chart-outline"
-          message="Set a monthly spending cap, then record where money goes so it is subtracted from the budget."
+          message="Create a budget for a purpose (school, work, etc.). When you expense and pick that budget, the amount is added into it."
           onAction={() => router.push('/add-budget' as never)}
           title="No budgets yet"
         />
       ) : (
         budgets.map((budget) => {
           const over = budget.spent > budget.total_amount;
-          const remaining = Math.max(0, budget.total_amount - budget.spent);
+          const fullTotal = budget.total_amount + budget.spent;
           const timeline = budgetSpendTimeline(
             budget,
-            expenses.filter(
-              (item) =>
-                item.transaction_date >= budget.period_start &&
-                item.transaction_date <= budget.period_end
-            )
+            expenses.filter((item) => item.budget_id === budget.id)
           );
           return (
             <Card key={budget.id} style={styles.card}>
@@ -264,22 +261,34 @@ export default function BudgetsScreen() {
               </AppText>
               <View style={styles.cardTop}>
                 <View style={{ flex: 1, gap: 6 }}>
-                  <AppText>{budget.name}</AppText>
+                  <AppText variant="title">{budget.name}</AppText>
                   <Badge
-                    label={over ? 'Over budget' : `${Math.round(budget.percent)}% used`}
+                    label={over ? 'Over plan' : `${Math.round(budget.percent)}% of plan`}
                     variant={over ? 'danger' : 'success'}
                   />
                 </View>
-                <AmountText amount={remaining} size="small" color={over ? colors.expense : colors.income} />
               </View>
               <AppText muted variant="caption">
                 {budget.period_start} → {budget.period_end}
               </AppText>
+              <View style={styles.moneyBlock}>
+                <AppText muted variant="caption" style={styles.moneyLabel}>
+                  FULL TOTAL BUDGET
+                </AppText>
+                <AmountText
+                  amount={fullTotal}
+                  color={over ? colors.expense : colors.income}
+                  showSign
+                  size="large"
+                  style={styles.moneyHero}
+                />
+                <AppText muted variant="caption">
+                  plan {formatCurrency(budget.total_amount)} + expenses{' '}
+                  {formatCurrency(budget.spent, { showSign: true })}
+                  {over ? ' · over plan' : ''}
+                </AppText>
+              </View>
               <ProgressBar color={over ? colors.expense : colors.primary} percent={budget.percent} track={colors.border} />
-              <AppText muted variant="caption">
-                Spent {formatCurrency(budget.spent)} of {formatCurrency(budget.total_amount)}
-                {over ? ' · over budget' : ` · ${formatCurrency(remaining)} left`}
-              </AppText>
 
               {budget.categories.map((cat) => {
                 const pct = cat.limit_amount > 0 ? Math.round((cat.spent / cat.limit_amount) * 100) : 0;
@@ -298,10 +307,10 @@ export default function BudgetsScreen() {
               })}
 
               <AppText variant="caption" muted style={styles.step}>
-                2. SPEND FLOW
+                2. ADDED TO THIS BUDGET
               </AppText>
               <BudgetSpendFlow
-                emptyLabel="No spend yet. Record the first one below."
+                emptyLabel="Nothing added yet. Add an expense with this budget selected, or record one below."
                 entries={timeline}
               />
 
@@ -310,7 +319,7 @@ export default function BudgetsScreen() {
                   {mode === 'spend' ? (
                     <>
                       <AppText variant="caption" muted style={styles.step}>
-                        3. RECORD NEXT SPEND
+                        3. ADD EXPENSE TO THIS BUDGET
                       </AppText>
                       <AppText muted variant="caption">
                         WHERE DID THE MONEY GO?
@@ -359,14 +368,14 @@ export default function BudgetsScreen() {
                         userId={user?.id ?? ''}
                       />
                       <DateInput
-                        label="Date spent"
+                        label="Date"
                         onChange={setSpendDate}
-                        placeholder="Pick spend date"
+                        placeholder="Pick date"
                         value={spendDate}
                       />
                       <Input
                         keyboardType="decimal-pad"
-                        label="Amount spent (PHP)"
+                        label="Amount to add (PHP)"
                         onChangeText={setAmount}
                         placeholder="0.00"
                         value={amount}
@@ -374,7 +383,7 @@ export default function BudgetsScreen() {
                       <Button
                         loading={saving}
                         onPress={() => void recordSpend(budget)}
-                        title="Subtract from budget"
+                        title="Add to this budget"
                       />
                     </>
                   ) : null}
@@ -503,6 +512,9 @@ const styles = StyleSheet.create({
   title: { marginBottom: 0 },
   card: { marginBottom: 16, gap: 10 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  moneyBlock: { gap: 4, marginTop: 4, marginBottom: 4 },
+  moneyLabel: { letterSpacing: 0.6, fontWeight: '700' },
+  moneyHero: { fontSize: 36, lineHeight: 42 },
   track: { height: 8, borderRadius: 999, overflow: 'hidden' },
   fill: { height: 8, borderRadius: 999 },
   catRow: { gap: 6 },

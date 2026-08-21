@@ -80,6 +80,7 @@ export function ManageFinancesPage() {
   const [date, setDate] = useState(today());
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [budgetId, setBudgetId] = useState('');
 
   const [loanType, setLoanType] = useState<'debt' | 'receivable'>('debt');
   const [loanPerson, setLoanPerson] = useState('');
@@ -117,6 +118,13 @@ export function ManageFinancesPage() {
   );
   const otherCategorySelected = isOtherCategory(selectedFormCategory?.name);
   const kinsenaUpcoming = useMemo(() => nextKinsenaWindows(today()), []);
+  const activeBudgetsForDate = useMemo(
+    () =>
+      budgets.filter(
+        (budget) => date >= budget.period_start && date <= budget.period_end
+      ),
+    [budgets, date]
+  );
 
   const loanBreakdown = useMemo(
     () =>
@@ -177,13 +185,22 @@ export function ManageFinancesPage() {
   useEffect(() => {
     if (type !== 'income') {
       setCategoryId('');
+      setBudgetId('');
       return;
     }
+    setBudgetId('');
     const salary =
       categories.find((category) => category.type === 'income' && category.name === 'Salary') ??
       categories.find((category) => category.type === 'income');
     setCategoryId(salary?.id ?? '');
   }, [type, categories]);
+
+  useEffect(() => {
+    if (!budgetId) return;
+    if (!activeBudgetsForDate.some((budget) => budget.id === budgetId)) {
+      setBudgetId('');
+    }
+  }, [activeBudgetsForDate, budgetId]);
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -212,6 +229,7 @@ export function ManageFinancesPage() {
         userId: user.id,
         accountId,
         categoryId: categoryId || null,
+        budgetId: type === 'expense' && budgetId ? budgetId : null,
         type,
         amount: parsed,
         description: description.trim() || selectedCategory?.name || '',
@@ -219,8 +237,15 @@ export function ManageFinancesPage() {
       });
       setAmount('');
       setDescription('');
+      setBudgetId('');
       await refresh(user.id);
-      notify.success(type === 'income' ? 'Income saved' : 'Expense saved');
+      notify.success(
+        type === 'income'
+          ? 'Income saved'
+          : budgetId
+            ? 'Expense saved — added to selected budget'
+            : 'Expense saved'
+      );
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Could not save this transaction.');
     } finally {
@@ -379,6 +404,7 @@ export function ManageFinancesPage() {
         userId: user.id,
         accountId: modeId,
         categoryId: categoryIdForSpend,
+        budgetId: budget.id,
         type: 'expense',
         amount: parsed,
         description: isOtherCategory(category?.name)
@@ -391,7 +417,7 @@ export function ManageFinancesPage() {
       setSpendAmounts((current) => ({ ...current, [budget.id]: '' }));
       setSpendNotes((current) => ({ ...current, [budget.id]: '' }));
       await refresh(user.id);
-      notify.success('Spend saved and subtracted from budget');
+      notify.success('Spend logged — Current Balance updated; counts toward this budget plan');
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Could not record this spend.');
     } finally {
@@ -528,7 +554,7 @@ export function ManageFinancesPage() {
             <p className="mt-1 text-sm text-[var(--muted)]">
               {type === 'income'
                 ? 'Money you received — salary, freelance, allowance, or other income. Added to the account you pick.'
-                : 'Money you spent. Borrowed or lent cash belongs in Loans, not income.'}
+                : 'Spend from Current Balance (your income). Optionally pick a budget (school, work, etc.) so this expense is added into that budget.'}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {(['expense', 'income'] as const).map((value) => (
@@ -610,6 +636,28 @@ export function ManageFinancesPage() {
                 Add
               </button>
             </div>
+            {type === 'expense' ? (
+              <label className="mt-4 block text-sm font-medium">
+                Add to budget (optional)
+                <select
+                  className="auth-input mt-1"
+                  onChange={(event) => setBudgetId(event.target.value)}
+                  value={budgetId}
+                >
+                  <option value="">Expense log only — Current Balance only</option>
+                  {activeBudgetsForDate.map((budget) => (
+                    <option key={budget.id} value={budget.id}>
+                      {budget.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs font-normal text-[var(--muted)]">
+                  {activeBudgetsForDate.length === 0
+                    ? 'No budgets cover this date. Create a budget below, or leave as expense log only.'
+                    : 'Picking a budget adds this expense into that budget. Money still comes from your Current Balance.'}
+                </span>
+              </label>
+            ) : null}
             <label className="mt-4 block text-sm font-medium">
               {type === 'income' ? 'Income type' : 'Where did the money go?'}
               <select
@@ -955,18 +1003,22 @@ export function ManageFinancesPage() {
 
           <section className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
             <h2 className="text-lg font-bold">Budgets</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Create a budget for a purpose (school, work, etc.). When you expense and pick that budget, the amount is
+              added into it from your Current Balance.
+            </p>
             <form className="mt-4 space-y-3" onSubmit={(event) => void onBudget(event)}>
               <input
                 className="auth-input"
                 onChange={(event) => setBudgetName(event.target.value)}
-                placeholder="Budget name"
+                placeholder="Budget name (e.g. School, Work)"
                 value={budgetName}
               />
               <input
                 className="auth-input"
                 inputMode="decimal"
                 onChange={(event) => setBudgetTotal(event.target.value)}
-                placeholder="Total spending limit (PHP)"
+                placeholder="Plan total (PHP)"
                 value={budgetTotal}
               />
               <div className="grid grid-cols-2 gap-2">
@@ -997,17 +1049,12 @@ export function ManageFinancesPage() {
                       ? Math.min(100, Math.round((budget.spent / budget.total_amount) * 100))
                       : 0;
                   const over = budget.spent > budget.total_amount;
-                  const remaining = Math.max(0, budget.total_amount - budget.spent);
+                  const fullTotal = budget.total_amount + budget.spent;
                   const modeId = spendAccountIds[budget.id] || accountId;
                   const timeline = budgetSpendTimeline(
                     budget,
                     transactions
-                      .filter(
-                        (tx) =>
-                          tx.type === 'expense' &&
-                          tx.transaction_date >= budget.period_start &&
-                          tx.transaction_date <= budget.period_end
-                      )
+                      .filter((tx) => tx.type === 'expense' && tx.budget_id === budget.id)
                       .map((tx) => ({
                         id: tx.id,
                         amount: tx.amount,
@@ -1021,20 +1068,31 @@ export function ManageFinancesPage() {
                   return (
                     <li className="py-4" key={budget.id}>
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
                             1. Budget
                           </p>
-                          <p className="font-semibold">{budget.name}</p>
+                          <p className="text-xl font-bold">{budget.name}</p>
                           <p className="text-xs text-[var(--muted)]">
                             {budget.period_start} → {budget.period_end}
                           </p>
-                          <p className="mt-1 text-xs text-[var(--muted)]">
-                            Spent {formatCurrency(budget.spent)} of {formatCurrency(budget.total_amount)}
-                            {over ? ' · over budget' : ` · ${formatCurrency(remaining)} left`}
-                            {' · '}
-                            {percent}%
-                          </p>
+                          <div className="mt-4">
+                            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
+                              Full total budget
+                            </p>
+                            <p
+                              className={`mt-1 text-4xl font-extrabold tabular-nums tracking-tight ${
+                                over ? 'text-red-600' : 'text-emerald-600'
+                              }`}
+                            >
+                              {formatCurrency(fullTotal, { showSign: true })}
+                            </p>
+                            <p className="mt-1 text-sm text-[var(--muted)]">
+                              plan {formatCurrency(budget.total_amount)} + expenses{' '}
+                              {formatCurrency(budget.spent, { showSign: true })}
+                              {over ? ' · over plan' : ` · ${percent}%`}
+                            </p>
+                          </div>
                         </div>
                         <button
                           className="shrink-0 rounded-lg border border-[var(--border)] px-2 py-1 text-xs font-semibold"
@@ -1052,11 +1110,11 @@ export function ManageFinancesPage() {
                         />
                       </div>
                       <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                        2. Spend flow
+                        2. Added to this budget
                       </p>
                       {timeline.length === 0 ? (
                         <p className="mt-1 text-sm text-[var(--muted)]">
-                          No spend yet. Record the first one below.
+                          Nothing added yet. Add an expense with this budget selected, or record one below.
                         </p>
                       ) : (
                         <ol className="mt-2 space-y-2">
@@ -1068,9 +1126,11 @@ export function ManageFinancesPage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                                    Spend {item.step}
+                                    Added {item.step}
                                   </p>
-                                  <p className="text-base font-bold">{formatCurrency(item.amount)}</p>
+                                  <p className="text-2xl font-bold tabular-nums text-emerald-600">
+                                    {formatCurrency(item.amount, { showSign: true })}
+                                  </p>
                                 </div>
                                 <span
                                   className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -1079,7 +1139,7 @@ export function ManageFinancesPage() {
                                       : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
                                   }`}
                                 >
-                                  {item.overBudget ? 'Over budget' : 'Within budget'}
+                                  {item.overBudget ? 'Over plan' : 'Added to budget'}
                                 </span>
                               </div>
                               <p className="mt-1 text-xs text-[var(--muted)]">
@@ -1088,9 +1148,13 @@ export function ManageFinancesPage() {
                               {item.description ? (
                                 <p className="text-xs text-[var(--muted)]">{item.description}</p>
                               ) : null}
+                              <p className="mt-2 text-lg font-extrabold tabular-nums">
+                                Full total{' '}
+                                {formatCurrency(item.planTotal + item.spentToDate, { showSign: true })}
+                              </p>
                               <p className="text-xs text-[var(--muted)]">
-                                Spent to date {formatCurrency(item.spentToDate)} · remaining{' '}
-                                {formatCurrency(item.remainingAfter)}
+                                plan {formatCurrency(item.planTotal)} + expenses{' '}
+                                {formatCurrency(item.spentToDate, { showSign: true })}
                               </p>
                             </li>
                           ))}
@@ -1098,7 +1162,7 @@ export function ManageFinancesPage() {
                       )}
                       <div className="mt-3 space-y-2">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--muted)]">
-                          3. Record next spend
+                          3. Add expense to this budget
                         </p>
                         <p className="text-xs font-medium">Where did the money go?</p>
                         <PaymentModeChips
@@ -1146,7 +1210,7 @@ export function ManageFinancesPage() {
                                 [budget.id]: event.target.value,
                               }))
                             }
-                            placeholder="Amount spent"
+                            placeholder="Amount to add"
                             value={spendAmounts[budget.id] ?? ''}
                           />
                           <input
@@ -1166,7 +1230,7 @@ export function ManageFinancesPage() {
                             onClick={() => void onSpendBudget(budget)}
                             type="button"
                           >
-                            Subtract
+                            Add to this budget
                           </button>
                         </div>
                         <div className="flex gap-2">
@@ -1179,7 +1243,7 @@ export function ManageFinancesPage() {
                                 [budget.id]: event.target.value,
                               }))
                             }
-                            placeholder={`Update cap (${budget.total_amount})`}
+                            placeholder={`Update plan (${budget.total_amount})`}
                             value={budgetCaps[budget.id] ?? ''}
                           />
                           <button

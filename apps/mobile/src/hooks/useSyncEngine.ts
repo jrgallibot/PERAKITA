@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { syncNow } from '@/services/syncService';
+import { syncPendingAuth } from '@/services/authService';
 import { refreshPendingCount } from '@/database/repositories/syncQueueRepository';
 
 export function useSyncEngine() {
@@ -18,14 +19,22 @@ export function useSyncEngine() {
 
   useEffect(() => {
     if (!initialized || !userId || !isConnected || !isSupabaseConfigured) return;
-    void syncNow(userId);
+    void (async () => {
+      await syncPendingAuth();
+      const activeId = useAuthStore.getState().user?.id ?? userId;
+      await syncNow(activeId);
+    })();
   }, [initialized, userId, isConnected]);
 
   useEffect(() => {
     if (!initialized) return;
     const onChange = (state: AppStateStatus) => {
       if (state === 'active' && userId && useNetworkStore.getState().isConnected) {
-        void syncNow(userId);
+        void (async () => {
+          await syncPendingAuth();
+          const activeId = useAuthStore.getState().user?.id ?? userId;
+          await syncNow(activeId);
+        })();
       }
     };
     const sub = AppState.addEventListener('change', onChange);

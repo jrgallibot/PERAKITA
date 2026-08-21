@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function Index() {
-  const session = useAuthStore((s) => s.session);
+  const user = useAuthStore((s) => s.user);
   const initialized = useAuthStore((s) => s.initialized);
   const { colors } = useTheme();
 
@@ -16,7 +16,7 @@ export default function Index() {
     );
   }
 
-  if (session) {
+  if (user) {
     return <Redirect href="/(tabs)/home" />;
   }
 

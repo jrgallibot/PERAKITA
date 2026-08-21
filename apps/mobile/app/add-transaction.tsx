@@ -9,6 +9,7 @@ import { notify } from '@/stores/toastStore';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuthStore } from '@/stores/authStore';
 import { accountRepository } from '@/database/repositories/accountRepository';
+import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { categoryRepository } from '@/database/repositories/categoryRepository';
 import { transactionRepository } from '@/database/repositories/transactionRepository';
 
@@ -38,6 +39,7 @@ export default function AddTransactionScreen() {
   const [date, setDate] = useState(today());
   const [accountId, setAccountId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [budgetId, setBudgetId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const categoryType: CategoryType = type === 'income' ? 'income' : 'expense';
@@ -54,14 +56,27 @@ export default function AddTransactionScreen() {
     queryFn: () => categoryRepository.findAll(user!.id, categoryType),
   });
 
+  const { data: activeBudgets = [] } = useQuery({
+    queryKey: ['budgets', 'active', user?.id, date],
+    enabled: !!user?.id && type === 'expense',
+    queryFn: () => budgetRepository.findActiveForDate(user!.id, date || today()),
+  });
+
   useEffect(() => {
     if (!accountId && accounts[0]) setAccountId(accounts[0].id);
   }, [accounts, accountId]);
 
   useEffect(() => {
     setCategoryId(null);
+    setBudgetId(null);
   }, [type]);
 
+  useEffect(() => {
+    if (!budgetId) return;
+    if (!activeBudgets.some((budget) => budget.id === budgetId)) {
+      setBudgetId(null);
+    }
+  }, [activeBudgets, budgetId]);
   useEffect(() => {
     if (type !== 'income' || categoryId || categories.length === 0) return;
     const salary = categories.find((c) => c.name === 'Salary') ?? categories[0];
@@ -96,6 +111,7 @@ export default function AddTransactionScreen() {
       await transactionRepository.create(user.id, {
         account_id: accountId,
         category_id: categoryId,
+        budget_id: type === 'expense' ? budgetId : null,
         type,
         amount: parsed,
         description: description.trim() || selectedCategory?.name || type,
@@ -109,7 +125,13 @@ export default function AddTransactionScreen() {
         queryClient.invalidateQueries({ queryKey: ['transactions', user.id, 'settings-log'] }),
         queryClient.invalidateQueries({ queryKey: ['transactions', user.id, 'log'] }),
       ]);
-      notify.success(type === 'income' ? 'Income saved' : 'Expense saved');
+      notify.success(
+        type === 'income'
+          ? 'Income saved'
+          : budgetId
+            ? 'Expense saved — added to selected budget'
+            : 'Expense saved'
+      );
       router.back();
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not save this transaction.');
@@ -161,7 +183,7 @@ export default function AddTransactionScreen() {
         <AppText muted style={styles.hint}>
           {type === 'income'
             ? 'Money you received — salary, freelance, allowance, or other income. This is added to the account you pick.'
-            : 'Money you spent. Borrowed or lent cash? Use Loans instead of mixing it with income.'}
+            : 'Spend from Current Balance (your income). Optionally pick a budget (school, work, etc.) so this expense is added into that budget.'}
         </AppText>
         {type === 'expense' ? (
           <Pressable onPress={() => router.replace('/add-loan' as never)} style={styles.loanLink}>
@@ -196,6 +218,57 @@ export default function AddTransactionScreen() {
           selectedId={accountId}
           userId={user?.id ?? ''}
         />
+
+        {type === 'expense' ? (
+          <>
+            <AppText muted variant="caption" style={styles.sectionLabel}>
+              ADD TO BUDGET (OPTIONAL)
+            </AppText>
+            <AppText muted style={styles.budgetHint}>
+              Leave as “Expense log only” to only reduce Current Balance. Pick a budget to add this expense into
+              that budget (school, work, etc.).
+            </AppText>
+            <View style={styles.chips}>
+              <Pressable
+                onPress={() => setBudgetId(null)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: budgetId === null ? colors.primaryMuted : colors.surface,
+                    borderColor: budgetId === null ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <Ionicons color={colors.primary} name="list-outline" size={16} />
+                <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>Expense log only</Text>
+              </Pressable>
+              {activeBudgets.map((budget) => {
+                const selected = budgetId === budget.id;
+                return (
+                  <Pressable
+                    key={budget.id}
+                    onPress={() => setBudgetId(budget.id)}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: selected ? colors.primaryMuted : colors.surface,
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                  >
+                    <Ionicons color={colors.primary} name="pie-chart-outline" size={16} />
+                    <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{budget.name}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {activeBudgets.length === 0 ? (
+              <AppText muted style={styles.budgetEmpty}>
+                No budgets cover this date. Create a budget first, or save as expense log only.
+              </AppText>
+            ) : null}
+          </>
+        ) : null}
 
         <AppText muted variant="caption" style={styles.sectionLabel}>
           {type === 'income' ? 'INCOME TYPE' : 'WHERE DID THE MONEY GO?'}
@@ -280,6 +353,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   hint: { marginBottom: 8, lineHeight: 20 },
+  budgetHint: { marginBottom: 10, lineHeight: 18 },
+  budgetEmpty: { marginBottom: 12, lineHeight: 18 },
   loanLink: { marginBottom: 16, minHeight: 24, justifyContent: 'center' },
   sectionLabel: { marginBottom: 8, marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },

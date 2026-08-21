@@ -24,6 +24,7 @@ function mapTransaction(row: Record<string, unknown>): Transaction {
     user_id: row.user_id as string,
     account_id: row.account_id as string,
     category_id: (row.category_id as string) ?? null,
+    budget_id: (row.budget_id as string) ?? null,
     type: row.type as TransactionType,
     amount: row.amount as number,
     description: (row.description as string) ?? null,
@@ -106,6 +107,7 @@ export const transactionRepository = {
     data: {
       account_id: string;
       category_id: string | null;
+      budget_id?: string | null;
       type: TransactionType;
       amount: number;
       description?: string | null;
@@ -118,18 +120,20 @@ export const transactionRepository = {
     const id = newId();
     const now = nowIso();
     const sync = createSyncFields('pending');
+    const budgetId = data.type === 'expense' ? (data.budget_id ?? null) : null;
 
     await db.runAsync(
       `INSERT INTO transactions (
-        id, user_id, account_id, category_id, type, amount, description, notes,
+        id, user_id, account_id, category_id, budget_id, type, amount, description, notes,
         transaction_date, transfer_to_account_id,
         created_at, updated_at, deleted_at, sync_status, last_synced_at, device_id, version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         userId,
         data.account_id,
         data.category_id,
+        budgetId,
         data.type,
         data.amount,
         data.description ?? null,
@@ -151,6 +155,7 @@ export const transactionRepository = {
       user_id: userId,
       account_id: data.account_id,
       category_id: data.category_id,
+      budget_id: budgetId,
       type: data.type,
       amount: data.amount,
       description: data.description ?? null,

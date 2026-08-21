@@ -5,7 +5,7 @@ import { AppText, Badge, Card } from '@/components/ui';
 
 export function BudgetSpendFlow({
   entries,
-  emptyLabel = 'No spend recorded yet.',
+  emptyLabel = 'Nothing added to this budget yet.',
 }: {
   entries: BudgetSpendSummary[];
   emptyLabel?: string;
@@ -34,14 +34,16 @@ export function BudgetSpendFlow({
           <Card style={styles.card}>
             <View style={styles.head}>
               <AppText variant="caption" muted>
-                Spend {item.step}
+                Added {item.step}
               </AppText>
               <Badge
-                label={item.overBudget ? 'Over budget' : 'Within budget'}
+                label={item.overBudget ? 'Over plan' : 'Added to budget'}
                 variant={item.overBudget ? 'danger' : 'success'}
               />
             </View>
-            <AppText style={styles.amount}>{formatCurrency(item.amount)}</AppText>
+            <AppText style={[styles.amount, { color: colors.income }]}>
+              {formatCurrency(item.amount, { showSign: true })}
+            </AppText>
             <AppText muted variant="caption">
               {item.spendDate} · {item.category} · via {item.method}
             </AppText>
@@ -50,8 +52,12 @@ export function BudgetSpendFlow({
                 {item.description}
               </AppText>
             ) : null}
+            <AppText style={styles.runningTotal}>
+              Full total {formatCurrency(item.planTotal + item.spentToDate, { showSign: true })}
+            </AppText>
             <AppText muted variant="caption">
-              Spent to date {formatCurrency(item.spentToDate)} · remaining {formatCurrency(item.remainingAfter)}
+              plan {formatCurrency(item.planTotal)} + expenses{' '}
+              {formatCurrency(item.spentToDate, { showSign: true })}
             </AppText>
           </Card>
         </View>
@@ -67,5 +73,6 @@ const styles = StyleSheet.create({
   line: { flex: 1, width: 2, marginVertical: 4 },
   card: { flex: 1, marginBottom: 10, padding: 12, gap: 4 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  amount: { fontWeight: '700' },
+  amount: { fontWeight: '700', fontSize: 22, lineHeight: 28 },
+  runningTotal: { fontWeight: '800', fontSize: 18, lineHeight: 24, marginTop: 4 },
 });

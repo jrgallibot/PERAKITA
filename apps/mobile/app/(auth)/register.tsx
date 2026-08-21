@@ -10,20 +10,21 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { registerSchema, mapAuthError, type RegisterInput } from '@perakita/shared';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { getWebAppLink } from '@/lib/webApp';
 import { Screen, Input, Button, AppText } from '@/components/ui';
 import { notify } from '@/stores/toastStore';
 import { BrandLogo } from '@/components/BrandLogo';
 import { DeveloperCredit } from '@/components/DeveloperCredit';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useNetworkStore } from '@/stores/networkStore';
+import { registerSmart } from '@/services/authService';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function RegisterScreen() {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
+  const isConnected = useNetworkStore((s) => s.isConnected);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [emailNotice, setEmailNotice] = useState(false);
   const isTablet = width >= 768;
 
   const {
@@ -46,47 +47,26 @@ export default function RegisterScreen() {
   const acceptTerms = watch('acceptTerms');
 
   const onSubmit = async (data: RegisterInput) => {
-    if (!isSupabaseConfigured) {
-      notify.error('Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file.');
-      return;
-    }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { display_name: data.displayName || undefined },
-        emailRedirectTo: getWebAppLink('/login'),
-      },
-    });
-    setLoading(false);
-    if (error) {
-      notify.error(mapAuthError(error.message));
-      return;
+    try {
+      const result = await registerSmart({
+        email: data.email,
+        password: data.password,
+        displayName: data.displayName,
+      });
+      if (result.needsEmailConfirmation) {
+        setEmailNotice(true);
+        notify.success('Account ready offline — confirm email when you are online');
+      } else {
+        notify.success(result.mode === 'local' ? 'Account created offline' : 'Account created');
+      }
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      notify.error(mapAuthError(error instanceof Error ? error.message : 'Could not create account.'));
+    } finally {
+      setLoading(false);
     }
-    notify.success('Account created');
-    setSuccess(true);
   };
-
-  if (success) {
-    return (
-      <Screen>
-        <View style={[styles.center, isTablet && styles.tabletContainer]}>
-          <View style={[styles.successIcon, { backgroundColor: colors.primaryMuted }]}>
-            <Ionicons name="mail-outline" size={40} color={colors.primary} />
-          </View>
-          <AppText variant="title" style={styles.successTitle}>
-            Check your email
-          </AppText>
-          <AppText muted style={styles.successMsg}>
-            We sent a verification link. Confirm your email, then sign in to start tracking your
-            finances.
-          </AppText>
-          <Button onPress={() => router.replace('/(auth)/login')} title="Back to Sign In" />
-        </View>
-      </Screen>
-    );
-  }
 
   return (
     <Screen edges={['top', 'left', 'right', 'bottom']}>
@@ -96,8 +76,18 @@ export default function RegisterScreen() {
           <AppText variant="title" style={styles.headerTitle}>
             Create account
           </AppText>
-          <AppText muted>Start managing your money offline</AppText>
+          <AppText muted>
+            {isConnected
+              ? 'Works offline on this phone — syncs when you reconnect'
+              : 'You are offline — account will be saved on this phone and synced later'}
+          </AppText>
         </View>
+
+        {emailNotice ? (
+          <AppText color={colors.primary} style={styles.emailNotice} variant="caption">
+            Check your email to verify your cloud account when online. You can keep using the app offline now.
+          </AppText>
+        ) : null}
 
         <Controller
           control={control}
@@ -202,21 +192,10 @@ const styles = StyleSheet.create({
   tabletContainer: { maxWidth: 440, alignSelf: 'center', width: '100%' },
   header: { marginBottom: 20, alignItems: 'center', gap: 8 },
   headerTitle: { marginTop: 4 },
+  emailNotice: { textAlign: 'center', marginBottom: 12, fontWeight: '600' },
   termsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   termsText: { flex: 1, fontSize: 13, lineHeight: 18 },
   termsError: { fontSize: 13, marginBottom: 12 },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   link: { fontSize: 16, fontWeight: '600' },
-  center: { flex: 1, justifyContent: 'center', paddingTop: 80 },
-  successIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  successTitle: { textAlign: 'center', marginBottom: 12 },
-  successMsg: { textAlign: 'center', marginBottom: 24, lineHeight: 22 },
 });

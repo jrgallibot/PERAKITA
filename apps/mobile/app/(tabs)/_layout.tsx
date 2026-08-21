@@ -7,7 +7,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { fonts } from '@/theme/fonts';
 
 export default function TabsLayout() {
-  const session = useAuthStore((s) => s.session);
+  const user = useAuthStore((s) => s.user);
   const initialized = useAuthStore((s) => s.initialized);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -20,7 +20,7 @@ export default function TabsLayout() {
     );
   }
 
-  if (!session) {
+  if (!user) {
     return <Redirect href="/(auth)/login" />;
   }
 

@@ -83,6 +83,8 @@ export interface Transaction extends SyncMetadata {
   user_id: string;
   account_id: string;
   category_id: string | null;
+  /** When set, expense counts toward this budget only. Null = transaction log only. */
+  budget_id: string | null;
   type: TransactionType;
   amount: number;
   description: string | null;

@@ -205,6 +205,29 @@ ALTER TABLE profiles ADD COLUMN sex TEXT;
 ALTER TABLE profiles ADD COLUMN avatar_url TEXT;
 `,
   },
+  {
+    name: '005_transaction_budget_id',
+    sql: `ALTER TABLE transactions ADD COLUMN budget_id TEXT;`,
+  },
+  {
+    name: '006_local_credentials',
+    sql: `
+CREATE TABLE IF NOT EXISTS local_credentials (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL UNIQUE,
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  display_name TEXT,
+  supabase_user_id TEXT,
+  auth_sync_status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_credentials_email ON local_credentials(email);
+CREATE INDEX IF NOT EXISTS idx_local_credentials_sync ON local_credentials(auth_sync_status);
+`,
+  },
 ];
 
 function splitSqlStatements(sql: string): string[] {

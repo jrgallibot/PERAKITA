@@ -5,6 +5,7 @@ import { initializeDatabase } from '@/database/database';
 import { seedUserData } from '@/services/seedService';
 import { loadThemePreference, fetchProfileFromCloud } from '@/services/settingsService';
 import { syncNow } from '@/services/syncService';
+import { restoreLocalSessionIfNeeded, syncPendingAuth } from '@/services/authService';
 import { useNetworkStore } from '@/stores/networkStore';
 
 let hydrateLock: Promise<void> | null = null;
@@ -15,13 +16,16 @@ async function hydrateUserData(userId: string, email?: string | null): Promise<v
   hydrateLock = (async () => {
     const online = isSupabaseConfigured && useNetworkStore.getState().isConnected;
     if (online) {
-      await syncNow(userId);
+      await syncPendingAuth();
+      const activeId = useAuthStore.getState().user?.id ?? userId;
+      await syncNow(activeId);
     }
-    await seedUserData(userId, email);
+    await seedUserData(useAuthStore.getState().user?.id ?? userId, email);
     if (online) {
-      await syncNow(userId);
+      const activeId = useAuthStore.getState().user?.id ?? userId;
+      await syncNow(activeId);
       try {
-        await fetchProfileFromCloud(userId);
+        await fetchProfileFromCloud(activeId);
       } catch {
         // Profile pull is best-effort; local seed remains available.
       }
@@ -34,7 +38,7 @@ async function hydrateUserData(userId: string, email?: string | null): Promise<v
 }
 
 export function useAuthListener() {
-  const setSession = useAuthStore((s) => s.setSession);
+  const setCloudSession = useAuthStore((s) => s.setCloudSession);
   const setInitialized = useAuthStore((s) => s.setInitialized);
 
   useEffect(() => {
@@ -50,9 +54,17 @@ export function useAuthListener() {
 
       if (!mounted) return;
 
-      setSession(session);
       if (session?.user) {
+        setCloudSession(session);
         await hydrateUserData(session.user.id, session.user.email);
+      } else {
+        const restored = await restoreLocalSessionIfNeeded();
+        if (restored) {
+          const user = useAuthStore.getState().user;
+          if (user) await hydrateUserData(user.id, user.email);
+        } else {
+          setCloudSession(null);
+        }
       }
       if (mounted) setInitialized(true);
     }
@@ -62,9 +74,17 @@ export function useAuthListener() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      if (event === 'SIGNED_IN' && session?.user) {
-        await hydrateUserData(session.user.id, session.user.email);
+      if (session?.user) {
+        setCloudSession(session);
+        if (event === 'SIGNED_IN') {
+          await hydrateUserData(session.user.id, session.user.email);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        // Keep local offline session if one is active; clearAuth is handled by signOutAll.
+        const mode = useAuthStore.getState().authMode;
+        if (mode !== 'local') {
+          setCloudSession(null);
+        }
       }
     });
 
@@ -72,5 +92,5 @@ export function useAuthListener() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [setSession, setInitialized]);
+  }, [setCloudSession, setInitialized]);
 }

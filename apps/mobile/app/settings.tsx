@@ -26,9 +26,8 @@ import {
   type Sex,
   type ThemeMode,
 } from '@perakita/shared';
-import { supabase } from '@/lib/supabase';
-import {
-  changePassword,
+import { signOutAll, syncPendingAuth } from '@/services/authService';
+import {  changePassword,
   fetchProfileFromCloud,
   getProfile,
   saveProfile,
@@ -147,12 +146,12 @@ export default function SettingsScreen() {
   };
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      notify.error(error.message);
-      return;
+    try {
+      await signOutAll();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not sign out.');
     }
-    router.replace('/(auth)/login');
   };
 
   const runSync = async () => {
@@ -162,11 +161,13 @@ export default function SettingsScreen() {
       return;
     }
     try {
-      await syncNow(user.id);
-      await fetchProfileFromCloud(user.id);
-      await queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard', user.id] });
-      await queryClient.invalidateQueries({ queryKey: ['loans', user.id] });
+      await syncPendingAuth();
+      const activeId = useAuthStore.getState().user?.id ?? user.id;
+      await syncNow(activeId);
+      await fetchProfileFromCloud(activeId);
+      await queryClient.invalidateQueries({ queryKey: ['profile', activeId] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard', activeId] });
+      await queryClient.invalidateQueries({ queryKey: ['loans', activeId] });
       await queryClient.invalidateQueries({ queryKey: ['transactions'] });
       notify.success(`Synced — updates show on ${getSyncDestinationLabel()}`);
     } catch (error) {

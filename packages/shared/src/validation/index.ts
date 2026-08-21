@@ -79,6 +79,7 @@ export const accountSchema = z.object({
 export const transactionSchema = z.object({
   account_id: z.string().uuid(),
   category_id: z.string().uuid().nullable(),
+  budget_id: z.string().uuid().nullable().optional(),
   type: z.enum([
     'income',
     'expense',

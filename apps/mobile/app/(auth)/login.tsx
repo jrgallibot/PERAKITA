@@ -5,16 +5,18 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as Haptics from 'expo-haptics';
 import { APP_TAGLINE, loginSchema, mapAuthError, type LoginInput } from '@perakita/shared';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Screen, Input, Button, AppText, Card } from '@/components/ui';
 import { notify } from '@/stores/toastStore';
 import { BrandLogo } from '@/components/BrandLogo';
 import { DeveloperCredit } from '@/components/DeveloperCredit';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useNetworkStore } from '@/stores/networkStore';
+import { loginSmart } from '@/services/authService';
 
 export default function LoginScreen() {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
+  const isConnected = useNetworkStore((s) => s.isConnected);
   const [loading, setLoading] = useState(false);
   const isTablet = width >= 768;
   const compact = height < 720;
@@ -29,20 +31,17 @@ export default function LoginScreen() {
   });
 
   const onSubmit = async (data: LoginInput) => {
-    if (!isSupabaseConfigured) {
-      notify.error('Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file.');
-      return;
-    }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword(data);
-    setLoading(false);
-    if (error) {
-      notify.error(mapAuthError(error.message));
-      return;
+    try {
+      const mode = await loginSmart(data.email, data.password);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      notify.success(mode === 'local' ? 'Signed in offline' : 'Signed in');
+      router.replace('/(tabs)/home');
+    } catch (error) {
+      notify.error(mapAuthError(error instanceof Error ? error.message : 'Sign in failed.'));
+    } finally {
+      setLoading(false);
     }
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    notify.success('Signed in');
-    router.replace('/(tabs)/home');
   };
 
   return (
@@ -53,6 +52,11 @@ export default function LoginScreen() {
           <AppText muted style={styles.tagline}>
             {APP_TAGLINE}
           </AppText>
+          {!isConnected ? (
+            <AppText color={colors.primary} style={styles.offlineBadge} variant="caption">
+              Offline mode — sign in with an account saved on this device
+            </AppText>
+          ) : null}
         </View>
 
         <Card elevated style={styles.formCard}>
@@ -60,7 +64,7 @@ export default function LoginScreen() {
             Welcome back
           </AppText>
           <AppText muted variant="caption" style={styles.formSubtitle}>
-            Sign in to continue tracking your finances.
+            Sign in to continue tracking your finances — works offline on this phone.
           </AppText>
 
           <Controller
@@ -131,6 +135,7 @@ const styles = StyleSheet.create({
   headerCompact: { marginBottom: 16, marginTop: 0 },
   brand: { fontSize: 30, marginTop: 12, marginBottom: 6 },
   tagline: { textAlign: 'center', paddingHorizontal: 12 },
+  offlineBadge: { marginTop: 10, textAlign: 'center', fontWeight: '600' },
   formCard: { marginBottom: 8 },
   formTitle: { marginBottom: 4 },
   formSubtitle: { marginBottom: 16 },

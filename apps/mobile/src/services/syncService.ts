@@ -95,6 +95,7 @@ const TABLE_COLUMNS: Record<SyncTable, string[]> = {
     'user_id',
     'account_id',
     'category_id',
+    'budget_id',
     'type',
     'amount',
     'description',
