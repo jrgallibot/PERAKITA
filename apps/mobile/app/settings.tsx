@@ -18,11 +18,13 @@ import {
   APP_ABOUT_POINTS,
   APP_CREDIT,
   APP_NAME,
+  REPORT_PERIOD_OPTIONS,
   ageFromBirthday,
   changePasswordSchema,
   profileSchema,
   type ChangePasswordInput,
   type ProfileInput,
+  type ReportPeriod,
   type Sex,
   type ThemeMode,
 } from '@perakita/shared';
@@ -32,8 +34,10 @@ import {  changePassword,
   getProfile,
   saveProfile,
   saveThemePreference,
+  updateReportEmailPrefs,
   uploadAvatar,
 } from '@/services/settingsService';
+import { sendFinanceReportEmail } from '@/services/reportEmailService';
 import { clearAllFinanceData, resetCurrentBalance } from '@/services/clearDataService';
 import { syncNow, getSyncDestinationLabel } from '@/services/syncService';
 import { notify } from '@/stores/toastStore';
@@ -103,6 +107,10 @@ export default function SettingsScreen() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [resettingBalance, setResettingBalance] = useState(false);
   const [clearingData, setClearingData] = useState(false);
+  const [reportEmailEnabled, setReportEmailEnabled] = useState(false);
+  const [reportEmailPeriod, setReportEmailPeriod] = useState<ReportPeriod>('monthly');
+  const [savingReportPrefs, setSavingReportPrefs] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
 
   const { data: logs = [] } = useQuery({
     queryKey: ['transactions', user?.id, 'settings-log'],
@@ -135,6 +143,8 @@ export default function SettingsScreen() {
     setBirthday(profile.birthday ?? '');
     setSex(profile.sex ?? '');
     setAvatarUrl(profile.avatar_url);
+    setReportEmailEnabled(profile.report_email_enabled);
+    setReportEmailPeriod(profile.report_email_period);
   }, [profile]);
 
   const age = useMemo(() => ageFromBirthday(birthday || null), [birthday]);
@@ -472,6 +482,103 @@ export default function SettingsScreen() {
         </View>
 
         <Button loading={savingProfile} onPress={onSaveProfile} title="Save profile" />
+      </Card>
+
+      <Card style={styles.section}>
+        <AppText muted variant="caption">
+          REPORT EMAIL NOTIFICATIONS
+        </AppText>
+        <AppText muted>
+          Auto-send reports to {user?.email ?? 'your account email'} via Supabase when you are online.
+        </AppText>
+        <Pressable
+          onPress={() => setReportEmailEnabled((value) => !value)}
+          style={[
+            styles.sexBtn,
+            {
+              backgroundColor: reportEmailEnabled ? colors.primary : colors.inputBackground,
+              borderColor: colors.border,
+              alignSelf: 'flex-start',
+              paddingHorizontal: 14,
+            },
+          ]}
+        >
+          <Text style={{ color: reportEmailEnabled ? '#FFFFFF' : colors.textPrimary, fontWeight: '700' }}>
+            {reportEmailEnabled ? 'Auto email ON' : 'Auto email OFF'}
+          </Text>
+        </Pressable>
+        <View style={styles.sexRow}>
+          {REPORT_PERIOD_OPTIONS.map((opt) => (
+            <Pressable
+              key={opt.value}
+              onPress={() => setReportEmailPeriod(opt.value)}
+              style={[
+                styles.sexBtn,
+                {
+                  backgroundColor:
+                    reportEmailPeriod === opt.value ? colors.primary : colors.inputBackground,
+                  borderColor: colors.border,
+                  opacity: reportEmailEnabled ? 1 : 0.5,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: reportEmailPeriod === opt.value ? '#FFFFFF' : colors.textPrimary,
+                  fontWeight: '600',
+                  fontSize: 12,
+                  textAlign: 'center',
+                }}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Button
+          loading={savingReportPrefs}
+          onPress={() => {
+            if (!user?.id) return;
+            if (!isConnected) {
+              notify.error('Connect to the internet to save email preferences.');
+              return;
+            }
+            setSavingReportPrefs(true);
+            void updateReportEmailPrefs(user.id, {
+              enabled: reportEmailEnabled,
+              period: reportEmailPeriod,
+            })
+              .then(async () => {
+                await queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+                notify.success('Report email preferences saved');
+              })
+              .catch((error) =>
+                notify.error(error instanceof Error ? error.message : 'Could not save preferences')
+              )
+              .finally(() => setSavingReportPrefs(false));
+          }}
+          title="Save email prefs"
+        />
+        <Button
+          loading={sendingReport}
+          onPress={() => {
+            if (!isConnected) {
+              notify.error('Connect to the internet to email your report.');
+              return;
+            }
+            setSendingReport(true);
+            void sendFinanceReportEmail({ mode: 'send_now', period: reportEmailPeriod })
+              .then((result) =>
+                notify.success(`Report emailed to ${result.emailed ?? user?.email ?? 'your inbox'}`)
+              )
+              .catch((error) =>
+                notify.error(error instanceof Error ? error.message : 'Could not send report email')
+              )
+              .finally(() => setSendingReport(false));
+          }}
+          title="Email me now"
+          variant="secondary"
+        />
       </Card>
 
       <Card style={styles.section}>

@@ -9,12 +9,14 @@ import {
   APP_ABOUT_POINTS,
   APP_CREDIT,
   APP_NAME,
+  REPORT_PERIOD_OPTIONS,
   ageFromBirthday,
   changePasswordSchema,
   mapAuthError,
   profileSchema,
   type ChangePasswordInput,
   type ProfileInput,
+  type ReportPeriod,
   type ThemeMode,
 } from '@perakita/shared';
 import { AppHeader } from '@/components/AppHeader';
@@ -26,8 +28,10 @@ import {
   changePassword,
   ensureProfile,
   updateProfile,
+  updateReportEmailPrefs,
   uploadAvatar,
 } from '@/lib/profile';
+import { sendFinanceReportEmail } from '@/lib/reportEmail';
 
 
 const THEME_OPTIONS: { label: string; value: ThemeMode }[] = [
@@ -55,6 +59,10 @@ export function SettingsPage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [resettingBalance, setResettingBalance] = useState(false);
   const [clearingData, setClearingData] = useState(false);
+  const [reportEmailEnabled, setReportEmailEnabled] = useState(false);
+  const [reportEmailPeriod, setReportEmailPeriod] = useState<ReportPeriod>('monthly');
+  const [savingReportPrefs, setSavingReportPrefs] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
 
   const profileForm = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -95,6 +103,8 @@ export function SettingsPage() {
           sex: profile.sex,
         });
         setAvatarUrl(profile.avatar_url);
+        setReportEmailEnabled(profile.report_email_enabled);
+        setReportEmailPeriod(profile.report_email_period);
       } catch (err) {
         if (!cancelled) {
           notify.error(err instanceof Error ? err.message : 'Could not load profile');
@@ -344,6 +354,79 @@ export function SettingsPage() {
               </button>
             </form>
           )}
+        </section>
+
+        <section className="mt-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Report email notifications
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Auto-send finance reports to <strong>{user?.email ?? 'your account email'}</strong> through
+            Supabase Edge Function email delivery.
+          </p>
+          <label className="mt-4 flex items-center gap-3 text-sm font-semibold">
+            <input
+              checked={reportEmailEnabled}
+              onChange={(event) => setReportEmailEnabled(event.target.checked)}
+              type="checkbox"
+            />
+            Enable automatic report emails
+          </label>
+          <label className="mt-4 block text-sm font-medium">
+            Frequency
+            <select
+              className="auth-input mt-1"
+              disabled={!reportEmailEnabled}
+              onChange={(event) => setReportEmailPeriod(event.target.value as ReportPeriod)}
+              value={reportEmailPeriod}
+            >
+              {REPORT_PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold"
+              disabled={savingReportPrefs || profileLoading}
+              onClick={() => {
+                if (!user?.id) return;
+                setSavingReportPrefs(true);
+                void updateReportEmailPrefs(user.id, {
+                  enabled: reportEmailEnabled,
+                  period: reportEmailPeriod,
+                })
+                  .then(() => notify.success('Report email preferences saved'))
+                  .catch((err: unknown) =>
+                    notify.error(err instanceof Error ? err.message : 'Could not save preferences')
+                  )
+                  .finally(() => setSavingReportPrefs(false));
+              }}
+              type="button"
+            >
+              {savingReportPrefs ? 'Saving…' : 'Save email prefs'}
+            </button>
+            <button
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white dark:text-slate-950"
+              disabled={sendingReport}
+              onClick={() => {
+                setSendingReport(true);
+                void sendFinanceReportEmail({ mode: 'send_now', period: reportEmailPeriod })
+                  .then((result) =>
+                    notify.success(`Report emailed to ${result.emailed ?? user?.email ?? 'your inbox'}`)
+                  )
+                  .catch((err: unknown) =>
+                    notify.error(err instanceof Error ? err.message : 'Could not send report email')
+                  )
+                  .finally(() => setSendingReport(false));
+              }}
+              type="button"
+            >
+              {sendingReport ? 'Sending…' : 'Email me now'}
+            </button>
+          </div>
         </section>
 
         <section className="mt-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">

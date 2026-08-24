@@ -129,7 +129,7 @@ export default function AddTransactionScreen() {
         type === 'income'
           ? 'Income saved'
           : budgetId
-            ? 'Expense saved — added to selected budget'
+            ? 'Expense saved — subtracted from budget and Current Balance'
             : 'Expense saved'
       );
       router.back();
@@ -183,7 +183,7 @@ export default function AddTransactionScreen() {
         <AppText muted style={styles.hint}>
           {type === 'income'
             ? 'Money you received — salary, freelance, allowance, or other income. This is added to the account you pick.'
-            : 'Spend from Current Balance (your income). Optionally pick a budget (school, work, etc.) so this expense is added into that budget.'}
+            : 'Spend from Current Balance (your income). Pick a budget to subtract this expense from that budget plan.'}
         </AppText>
         {type === 'expense' ? (
           <Pressable onPress={() => router.replace('/add-loan' as never)} style={styles.loanLink}>
@@ -222,11 +222,11 @@ export default function AddTransactionScreen() {
         {type === 'expense' ? (
           <>
             <AppText muted variant="caption" style={styles.sectionLabel}>
-              ADD TO BUDGET (OPTIONAL)
+              SUBTRACT FROM BUDGET (OPTIONAL)
             </AppText>
             <AppText muted style={styles.budgetHint}>
-              Leave as “Expense log only” to only reduce Current Balance. Pick a budget to add this expense into
-              that budget (school, work, etc.).
+              Leave as “No budget” to only reduce Current Balance. Pick a budget to subtract this expense from that
+              plan (school, work, etc.).
             </AppText>
             <View style={styles.chips}>
               <Pressable
@@ -240,7 +240,7 @@ export default function AddTransactionScreen() {
                 ]}
               >
                 <Ionicons color={colors.primary} name="list-outline" size={16} />
-                <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>Expense log only</Text>
+                <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>No budget</Text>
               </Pressable>
               {activeBudgets.map((budget) => {
                 const selected = budgetId === budget.id;
@@ -264,7 +264,7 @@ export default function AddTransactionScreen() {
             </View>
             {activeBudgets.length === 0 ? (
               <AppText muted style={styles.budgetEmpty}>
-                No budgets cover this date. Create a budget first, or save as expense log only.
+                No budgets cover this date. Create a budget first, or save without a budget.
               </AppText>
             ) : null}
           </>

@@ -10,6 +10,7 @@ import { RegisterPage } from '@/spa/pages/RegisterPage';
 import { ForgotPasswordPage } from '@/spa/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/spa/pages/ResetPasswordPage';
 import { DashboardPage } from '@/spa/pages/DashboardPage';
+import { ReportsPage } from '@/spa/pages/ReportsPage';
 import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
 import { SettingsPage } from '@/spa/pages/SettingsPage';
 import { ToastProvider } from '@/components/Toast';
@@ -71,6 +72,14 @@ export function SpaApp() {
                   </ProtectedRoute>
                 }
                 path="/dashboard"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <ReportsPage />
+                  </ProtectedRoute>
+                }
+                path="/reports"
               />
               <Route
                 element={

@@ -17,7 +17,7 @@ export function transactionKindLabel(type: string): string {
     case 'transfer':
       return 'Transfer';
     case 'adjustment':
-      return 'Adjustment';
+      return 'Budget spend (plan only)';
     default:
       return type;
   }
@@ -27,6 +27,7 @@ export function signedTransactionAmount(type: string, amount: number): number {
   if (type === 'income' || type === 'loan_received') return amount;
   if (
     type === 'expense' ||
+    type === 'adjustment' ||
     type === 'loan_given' ||
     type === 'loan_payment' ||
     type === 'debt_payment'

@@ -77,12 +77,31 @@ export default function BudgetsScreen() {
   const { data: expenses = [] } = useQuery({
     queryKey: ['transactions', user?.id, 'budget-spend'],
     enabled: !!user?.id,
-    queryFn: () => transactionRepository.findExpenses(user!.id),
+    queryFn: () => transactionRepository.findBudgetSpends(user!.id),
   });
 
   useEffect(() => {
     if (!accountId && accounts[0]) setAccountId(accounts[0].id);
   }, [accounts, accountId]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    void (async () => {
+      const fixed = await transactionRepository.repairBudgetTrackSpends(user.id);
+      if (!active || fixed === 0) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['budgets'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['transactions'] }),
+        queryClient.invalidateQueries({ queryKey: ['accounts'] }),
+      ]);
+      notify.info(`Restored Current Balance for ${fixed} budget-only spend(s)`);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, queryClient]);
 
   const refresh = async () => {
     await Promise.all([
@@ -136,7 +155,7 @@ export default function BudgetsScreen() {
       return;
     }
     if (!accountId) {
-      notify.error('Choose a payment mode.');
+      notify.error('Choose a payment mode (for the spend log only — not Current Balance).');
       return;
     }
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -154,20 +173,20 @@ export default function BudgetsScreen() {
         account_id: accountId,
         category_id: categoryId,
         budget_id: budget.id,
-        type: 'expense',
+        type: 'adjustment',
         amount: parsed,
         description: isOtherCategory(category?.name)
           ? `${spendNote.trim()} · ${budget.name}`
           : category
             ? `${category.name} · ${budget.name}`
             : budget.name,
-        notes: `Budget spend · ${budget.name}`,
+        notes: 'Budget track only — not from Current Balance',
         transaction_date: spendDate || todayIso(),
       });
       setAmount('');
       setSpendNote('');
       await refresh();
-      notify.success('Spend logged — Current Balance updated; counts toward this budget plan');
+      notify.success('Spend recorded — subtracted from this budget only');
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'Could not record this spend.');
     } finally {
@@ -242,14 +261,15 @@ export default function BudgetsScreen() {
         <EmptyState
           actionLabel="Create a budget"
           icon="pie-chart-outline"
-          message="Create a budget for a purpose (school, work, etc.). When you expense and pick that budget, the amount is added into it."
+          message="Set a budget plan (school, work, etc.). Record spend here to subtract from the budget only — not from Current Balance. To reduce Current Balance, use Add expense (and optionally pick a budget there)."
           onAction={() => router.push('/add-budget' as never)}
           title="No budgets yet"
         />
       ) : (
         budgets.map((budget) => {
           const over = budget.spent > budget.total_amount;
-          const fullTotal = budget.total_amount + budget.spent;
+          const remaining = Math.max(0, budget.total_amount - budget.spent);
+          const overBy = over ? budget.spent - budget.total_amount : 0;
           const timeline = budgetSpendTimeline(
             budget,
             expenses.filter((item) => item.budget_id === budget.id)
@@ -263,7 +283,7 @@ export default function BudgetsScreen() {
                 <View style={{ flex: 1, gap: 6 }}>
                   <AppText variant="title">{budget.name}</AppText>
                   <Badge
-                    label={over ? 'Over plan' : `${Math.round(budget.percent)}% of plan`}
+                    label={over ? 'Over budget' : `${Math.round(budget.percent)}% used`}
                     variant={over ? 'danger' : 'success'}
                   />
                 </View>
@@ -273,19 +293,17 @@ export default function BudgetsScreen() {
               </AppText>
               <View style={styles.moneyBlock}>
                 <AppText muted variant="caption" style={styles.moneyLabel}>
-                  FULL TOTAL BUDGET
+                  BUDGET LEFT
                 </AppText>
                 <AmountText
-                  amount={fullTotal}
+                  amount={remaining}
                   color={over ? colors.expense : colors.income}
-                  showSign
                   size="large"
                   style={styles.moneyHero}
                 />
                 <AppText muted variant="caption">
-                  plan {formatCurrency(budget.total_amount)} + expenses{' '}
-                  {formatCurrency(budget.spent, { showSign: true })}
-                  {over ? ' · over plan' : ''}
+                  plan {formatCurrency(budget.total_amount)} · spent {formatCurrency(budget.spent)}
+                  {over ? ` · over by ${formatCurrency(overBy)}` : ''}
                 </AppText>
               </View>
               <ProgressBar color={over ? colors.expense : colors.primary} percent={budget.percent} track={colors.border} />
@@ -307,10 +325,10 @@ export default function BudgetsScreen() {
               })}
 
               <AppText variant="caption" muted style={styles.step}>
-                2. ADDED TO THIS BUDGET
+                2. SPEND FROM THIS BUDGET
               </AppText>
               <BudgetSpendFlow
-                emptyLabel="Nothing added yet. Add an expense with this budget selected, or record one below."
+                emptyLabel="No spend yet. Add an expense with this budget selected, or record one below."
                 entries={timeline}
               />
 
@@ -319,10 +337,10 @@ export default function BudgetsScreen() {
                   {mode === 'spend' ? (
                     <>
                       <AppText variant="caption" muted style={styles.step}>
-                        3. ADD EXPENSE TO THIS BUDGET
+                        3. RECORD SPEND
                       </AppText>
                       <AppText muted variant="caption">
-                        WHERE DID THE MONEY GO?
+                        Subtracts from this budget plan only — does not change Current Balance.
                       </AppText>
                       <View style={styles.grid}>
                         {categories.map((category) => {
@@ -375,7 +393,7 @@ export default function BudgetsScreen() {
                       />
                       <Input
                         keyboardType="decimal-pad"
-                        label="Amount to add (PHP)"
+                        label="Amount spent (PHP)"
                         onChangeText={setAmount}
                         placeholder="0.00"
                         value={amount}
@@ -383,7 +401,7 @@ export default function BudgetsScreen() {
                       <Button
                         loading={saving}
                         onPress={() => void recordSpend(budget)}
-                        title="Add to this budget"
+                        title="Record spend"
                       />
                     </>
                   ) : null}

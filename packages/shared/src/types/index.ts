@@ -48,6 +48,9 @@ export interface Profile {
   sex: Sex | null;
   avatar_url: string | null;
   default_currency: string;
+  report_email_enabled: boolean;
+  report_email_period: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  report_email_last_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }

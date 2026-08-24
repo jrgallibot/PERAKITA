@@ -71,6 +71,9 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   return {
     ...row,
     sex: (row.sex as Sex | null) ?? null,
+    report_email_enabled: false,
+    report_email_period: 'monthly',
+    report_email_last_sent_at: null,
   };
 }
 
@@ -156,6 +159,10 @@ export async function fetchProfileFromCloud(userId: string): Promise<Profile | n
     sex: (data.sex as Sex | null) ?? null,
     avatar_url: (data.avatar_url as string | null) ?? null,
     default_currency: (data.default_currency as string) ?? 'PHP',
+    report_email_enabled: Boolean(data.report_email_enabled),
+    report_email_period: ((data.report_email_period as string) ??
+      'monthly') as Profile['report_email_period'],
+    report_email_last_sent_at: (data.report_email_last_sent_at as string | null) ?? null,
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
   };
@@ -260,6 +267,21 @@ export async function uploadAvatar(userId: string, uri: string, mimeType = 'imag
     avatar_url: avatarUrl,
   });
   return avatarUrl;
+}
+
+export async function updateReportEmailPrefs(
+  userId: string,
+  input: { enabled: boolean; period: Profile['report_email_period'] }
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      report_email_enabled: input.enabled,
+      report_email_period: input.period,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
 }
 
 export async function changePassword(email: string, currentPassword: string, newPassword: string) {

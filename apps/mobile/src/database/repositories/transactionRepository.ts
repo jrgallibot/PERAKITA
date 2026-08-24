@@ -91,6 +91,20 @@ export const transactionRepository = {
     return rows.map(mapTransactionRow);
   },
 
+  /** Expenses + budget-only adjustments linked to a budget (does not require balance impact). */
+  async findBudgetSpends(userId: string, limit = 400): Promise<TransactionRow[]> {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `${DETAIL_SELECT}
+       WHERE t.user_id = ? AND t.deleted_at IS NULL
+         AND t.budget_id IS NOT NULL
+         AND t.type IN ('expense', 'adjustment')
+       ORDER BY t.transaction_date ASC, t.created_at ASC LIMIT ?`,
+      [userId, limit]
+    );
+    return rows.map(mapTransactionRow);
+  },
+
   async findByDateRange(userId: string, start: string, end: string): Promise<Transaction[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<Record<string, unknown>>(
@@ -120,7 +134,8 @@ export const transactionRepository = {
     const id = newId();
     const now = nowIso();
     const sync = createSyncFields('pending');
-    const budgetId = data.type === 'expense' ? (data.budget_id ?? null) : null;
+    const budgetId =
+      data.type === 'expense' || data.type === 'adjustment' ? (data.budget_id ?? null) : null;
 
     await db.runAsync(
       `INSERT INTO transactions (
@@ -201,6 +216,65 @@ export const transactionRepository = {
     }
   },
 
+  /**
+   * Older "Record spend" on Budgets used type=expense and reduced Current Balance.
+   * Convert those to budget-only adjustments and restore the balance.
+   */
+  async repairBudgetTrackSpends(userId: string): Promise<number> {
+    const db = await getDatabase();
+    const budgets = await db.getAllAsync<{ id: string; name: string }>(
+      `SELECT id, name FROM budgets WHERE user_id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
+    const budgetNameById = new Map(budgets.map((b) => [b.id, b.name]));
+
+    const candidates = await db.getAllAsync<{
+      id: string;
+      account_id: string;
+      amount: number;
+      budget_id: string | null;
+      description: string | null;
+      notes: string | null;
+    }>(
+      `SELECT id, account_id, amount, budget_id, description, notes FROM transactions
+       WHERE user_id = ? AND deleted_at IS NULL AND type = 'expense'
+         AND budget_id IS NOT NULL`,
+      [userId]
+    );
+
+    const rows = candidates.filter((row) => {
+      const notes = (row.notes ?? '').trim();
+      if (notes.startsWith('Budget spend')) return true;
+      const budgetName = budgetNameById.get(row.budget_id ?? '');
+      if (!budgetName) return false;
+      const description = (row.description ?? '').trim();
+      return description.endsWith(` · ${budgetName}`) && !notes;
+    });
+
+    if (rows.length === 0) return 0;
+    const now = nowIso();
+    for (const row of rows) {
+      await db.runAsync(
+        `UPDATE transactions
+         SET type = 'adjustment',
+             notes = 'Budget track only — not from Current Balance',
+             updated_at = ?,
+             sync_status = 'updated',
+             version = version + 1
+         WHERE id = ?`,
+        [now, row.id]
+      );
+      await enqueueSync('transactions', row.id, 'UPDATE', {
+        id: row.id,
+        type: 'adjustment',
+        notes: 'Budget track only — not from Current Balance',
+        updated_at: now,
+      });
+      await accountRepository.adjustBalance(row.account_id, row.amount);
+    }
+    return rows.length;
+  },
+
   async getIncomeExpenseBalance(userId: string): Promise<number> {
     const db = await getDatabase();
     const row = await db.getFirstAsync<{ total: number }>(
@@ -230,6 +304,33 @@ export const transactionRepository = {
       [userId, monthStart, monthEnd]
     );
     return { income: income?.total ?? 0, expenses: expenses?.total ?? 0 };
+  },
+
+  async getBudgetSpendInRange(userId: string, start: string, end: string): Promise<number> {
+    const db = await getDatabase();
+    const row = await db.getFirstAsync<{ total: number }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE user_id = ? AND deleted_at IS NULL
+         AND type IN ('expense', 'adjustment')
+         AND budget_id IS NOT NULL
+         AND transaction_date >= ? AND transaction_date <= ?`,
+      [userId, start, end]
+    );
+    return row?.total ?? 0;
+  },
+
+  async getTrendInRange(
+    userId: string,
+    start: string,
+    end: string
+  ): Promise<Array<{ transaction_date: string; type: string; amount: number }>> {
+    const db = await getDatabase();
+    return db.getAllAsync<{ transaction_date: string; type: string; amount: number }>(
+      `SELECT transaction_date, type, amount FROM transactions
+       WHERE user_id = ? AND deleted_at IS NULL AND type IN ('income', 'expense')
+         AND transaction_date >= ? AND transaction_date <= ?`,
+      [userId, start, end]
+    );
   },
 
   async getSpendingBreakdown(

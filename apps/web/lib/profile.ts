@@ -1,5 +1,6 @@
 import type { Profile, ProfileInput, Sex } from '@perakita/shared';
 import { supabase } from '@/lib/supabase';
+import type { ReportPeriod } from '@perakita/shared';
 
 function emptyToNull(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? '';
@@ -24,6 +25,9 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
     sex: (data.sex as Sex | null) ?? null,
     avatar_url: (data.avatar_url as string | null) ?? null,
     default_currency: (data.default_currency as string) ?? 'PHP',
+    report_email_enabled: Boolean(data.report_email_enabled),
+    report_email_period: ((data.report_email_period as string) ?? 'monthly') as Profile['report_email_period'],
+    report_email_last_sent_at: (data.report_email_last_sent_at as string | null) ?? null,
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
   };
@@ -94,6 +98,25 @@ export async function changePassword(email: string, currentPassword: string, new
   if (signInError) throw signInError;
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
+}
+
+export async function updateReportEmailPrefs(
+  userId: string,
+  input: { enabled: boolean; period: ReportPeriod }
+): Promise<Profile> {
+  await ensureProfile(userId);
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      report_email_enabled: input.enabled,
+      report_email_period: input.period,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
+  const profile = await fetchProfile(userId);
+  if (!profile) throw new Error('Profile not found after update');
+  return profile;
 }
 
 export async function sendPasswordResetEmail(email: string, redirectTo: string) {

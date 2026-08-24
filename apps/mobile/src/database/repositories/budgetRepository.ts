@@ -39,7 +39,8 @@ export const budgetRepository = {
       const budget = mapBudget(row);
       const spentRow = await db.getFirstAsync<{ total: number }>(
         `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-         WHERE user_id = ? AND deleted_at IS NULL AND type = 'expense'
+         WHERE user_id = ? AND deleted_at IS NULL
+           AND type IN ('expense', 'adjustment')
            AND budget_id = ?`,
         [userId, budget.id]
       );
@@ -47,7 +48,8 @@ export const budgetRepository = {
       const cats = await db.getAllAsync<Record<string, unknown>>(
         `SELECT bc.*, c.name as name, c.color as color,
            (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t
-            WHERE t.user_id = bc.user_id AND t.deleted_at IS NULL AND t.type = 'expense'
+            WHERE t.user_id = bc.user_id AND t.deleted_at IS NULL
+              AND t.type IN ('expense', 'adjustment')
               AND t.budget_id = bc.budget_id
               AND t.category_id = bc.category_id) as spent
          FROM budget_categories bc

@@ -1,14 +1,30 @@
-import { useCallback } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { formatCurrency } from '@perakita/shared';
+import {
+  buildBudgetStats,
+  buildPeriodTrend,
+  formatCurrency,
+  getReportPeriodRange,
+  REPORT_PERIOD_OPTIONS,
+  type ReportPeriod,
+} from '@perakita/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useTheme } from '@/providers/ThemeProvider';
+import { notify } from '@/stores/toastStore';
 import { transactionRepository } from '@/database/repositories/transactionRepository';
 import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { loanRepository } from '@/database/repositories/loanRepository';
 import { syncNow } from '@/services/syncService';
+import { sendFinanceReportEmail } from '@/services/reportEmailService';
 import {
   Screen,
   Card,
@@ -17,42 +33,52 @@ import {
   StatCard,
   SectionHeader,
   HeroBalanceCard,
+  Button,
 } from '@/components/ui';
 import { SpendingDonut } from '@/components/charts/SpendingDonut';
 import { TrendBarChart } from '@/components/charts/TrendBarChart';
 import { BudgetProgressBars } from '@/components/charts/BudgetProgressBars';
 
-function monthRange(): { start: string; end: string; label: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    label: now.toLocaleString('en-PH', { month: 'long', year: 'numeric' }),
-  };
-}
-
-export default function DashboardScreen() {
+export default function ReportsScreen() {
   const user = useAuthStore((s) => s.user);
   const { colors } = useTheme();
   const isConnected = useNetworkStore((s) => s.isConnected);
-  const month = monthRange();
+  const [period, setPeriod] = useState<ReportPeriod>('monthly');
+  const [emailing, setEmailing] = useState(false);
+  const range = useMemo(() => getReportPeriodRange(period), [period]);
+
+  useEffect(() => {
+    if (!user?.id || !isConnected) return;
+    void sendFinanceReportEmail({ mode: 'auto_if_due' }).catch(() => {
+      // Best-effort auto notify when online.
+    });
+  }, [user?.id, isConnected]);
 
   const { data, refetch, isRefetching } = useQuery({
-    queryKey: ['stats-dashboard', user?.id],
+    queryKey: ['stats-dashboard', user?.id, period, range.start, range.end],
     enabled: !!user?.id,
     queryFn: async () => {
-      const [balance, totals, spending, dailyTrend, budgets, loanTotals, txCount] = await Promise.all([
-        transactionRepository.getIncomeExpenseBalance(user!.id),
-        transactionRepository.getMonthlyTotals(user!.id, month.start, month.end),
-        transactionRepository.getSpendingBreakdown(user!.id, month.start, month.end),
-        transactionRepository.getDailyTrend(user!.id, 14),
-        budgetRepository.findAllWithProgress(user!.id),
-        loanRepository.totals(user!.id),
-        transactionRepository.countAll(user!.id),
-      ]);
-      return { balance, totals, spending, dailyTrend, budgets, loanTotals, txCount };
+      const [balance, totals, spending, trendRows, budgets, loanTotals, txCount, budgetSpend] =
+        await Promise.all([
+          transactionRepository.getIncomeExpenseBalance(user!.id),
+          transactionRepository.getMonthlyTotals(user!.id, range.start, range.end),
+          transactionRepository.getSpendingBreakdown(user!.id, range.start, range.end),
+          transactionRepository.getTrendInRange(user!.id, range.start, range.end),
+          budgetRepository.findAllWithProgress(user!.id),
+          loanRepository.totals(user!.id),
+          transactionRepository.countAll(user!.id),
+          transactionRepository.getBudgetSpendInRange(user!.id, range.start, range.end),
+        ]);
+      return {
+        balance,
+        totals,
+        spending,
+        trend: buildPeriodTrend(trendRows, range),
+        budgets,
+        loanTotals,
+        txCount,
+        budgetSpend,
+      };
     },
   });
 
@@ -68,9 +94,38 @@ export default function DashboardScreen() {
   const expenses = data?.totals.expenses ?? 0;
   const net = income - expenses;
   const spending = data?.spending ?? [];
-  const dailyTrend = data?.dailyTrend ?? [];
+  const trend = data?.trend ?? [];
   const budgets = data?.budgets ?? [];
   const loanTotals = data?.loanTotals ?? { debts: 0, receivables: 0 };
+  const budgetSpend = data?.budgetSpend ?? 0;
+  const budgetStats = buildBudgetStats(
+    budgets.map((budget) => ({
+      id: budget.id,
+      name: budget.name,
+      total_amount: budget.total_amount,
+      spent: budget.spent,
+    }))
+  );
+
+  const emailReport = async () => {
+    if (!isConnected) {
+      notify.error('Connect to the internet to email your report.');
+      return;
+    }
+    if (!user?.email) {
+      notify.error('Sign in with an email account to receive reports.');
+      return;
+    }
+    setEmailing(true);
+    try {
+      const result = await sendFinanceReportEmail({ mode: 'send_now', period });
+      notify.success(`Report emailed to ${result.emailed ?? user.email}`);
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not send report email.');
+    } finally {
+      setEmailing(false);
+    }
+  };
 
   return (
     <Screen scroll={false} padded={false}>
@@ -84,44 +139,89 @@ export default function DashboardScreen() {
             Analytics
           </AppText>
           <AppText variant="display" style={styles.title}>
-            Dashboard
+            Reports
           </AppText>
           <AppText muted variant="caption">
-            {month.label} · charts, trends, and summaries
+            Daily, weekly, monthly, or yearly · emailed to your account email
           </AppText>
         </View>
 
         <View style={styles.content}>
+          <View style={styles.periodRow}>
+            {REPORT_PERIOD_OPTIONS.map((option) => {
+              const selected = period === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setPeriod(option.value)}
+                  style={[
+                    styles.periodChip,
+                    {
+                      backgroundColor: selected ? colors.primary : colors.surface,
+                      borderColor: selected ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: selected ? '#FFFFFF' : colors.textPrimary,
+                      fontWeight: '700',
+                      fontSize: 13,
+                    }}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <AppText muted variant="caption" style={styles.periodLabel}>
+            {range.label}
+          </AppText>
+
+          <Button loading={emailing} onPress={() => void emailReport()} title="Email this report" />
+
           <HeroBalanceCard
             amount={balance}
-            hint="Your running balance from income and expenses."
-            label="Total balance"
+            hint="Running balance from income and expenses (not budget-only spend)."
+            label="Current Balance"
           />
 
           <View style={styles.statsGrid}>
             <StatCard amount={income} icon="arrow-up-circle-outline" label="Income" tone="income" />
             <StatCard amount={expenses} icon="arrow-down-circle-outline" label="Expenses" tone="expense" />
             <StatCard amount={net} icon="pulse-outline" label="Net" showSign tone={net >= 0 ? 'income' : 'expense'} />
-            <StatCard icon="receipt-outline" label="Transactions" tone="primary" value={String(data?.txCount ?? 0)} />
+            <StatCard
+              amount={budgetSpend}
+              hint="From budget plans"
+              icon="pie-chart-outline"
+              label="Budget spend"
+              tone="primary"
+            />
           </View>
 
           <SectionHeader
-            subtitle="Daily income compared to expenses"
-            title="14-day cash flow"
+            subtitle={
+              period === 'yearly'
+                ? 'Income vs expenses by month'
+                : 'Income compared to expenses in this period'
+            }
+            title="Cash flow"
           />
           <Card>
-            {dailyTrend.some((point) => point.income > 0 || point.expense > 0) ? (
-              <TrendBarChart points={dailyTrend} />
+            {trend.some((point) => point.income > 0 || point.expense > 0) ? (
+              <TrendBarChart points={trend} />
             ) : (
               <EmptyState
                 icon="bar-chart-outline"
-                message="No transactions in the last 14 days."
+                message="No income or expenses in this period."
                 title="No activity yet"
               />
             )}
           </Card>
 
-          <SectionHeader subtitle={month.label} title="Spending by category" />
+          <SectionHeader subtitle={range.label} title="Spending by category" />
           <Card style={styles.chartCard}>
             {spending.length === 0 ? (
               <EmptyState
@@ -150,22 +250,24 @@ export default function DashboardScreen() {
             )}
           </Card>
 
-          <SectionHeader subtitle="How much of each budget is used" title="Budget progress" />
+          <SectionHeader
+            subtitle="Plan left after spend (budget track + expenses assigned to budgets)"
+            title="Budget progress"
+          />
           <Card>
-            <BudgetProgressBars
-              budgets={budgets.map((budget) => ({
-                id: budget.id,
-                name: budget.name,
-                total_amount: budget.total_amount,
-                spent: budget.spent,
-              }))}
-            />
+            <BudgetProgressBars budgets={budgetStats.map((b) => ({
+              id: b.id,
+              name: b.name,
+              total_amount: b.total,
+              spent: b.spent,
+            }))} />
           </Card>
 
-          <SectionHeader subtitle="Tracked separately from daily balance" title="Loans overview" />
+          <SectionHeader subtitle="Tracked separately from Current Balance" title="Loans overview" />
           <View style={styles.statsGrid}>
             <StatCard amount={loanTotals.debts} hint="Outstanding debt" icon="alert-circle-outline" label="You owe" tone="expense" />
             <StatCard amount={loanTotals.receivables} hint="Expected back" icon="cash-outline" label="Owed to you" tone="income" />
+            <StatCard icon="receipt-outline" label="All transactions" tone="primary" value={String(data?.txCount ?? 0)} />
           </View>
         </View>
       </ScrollView>
@@ -183,7 +285,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   title: { fontSize: 28, lineHeight: 34 },
-  content: { paddingHorizontal: 20, paddingTop: 16 },
+  content: { paddingHorizontal: 20, paddingTop: 16, gap: 4 },
+  periodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  periodChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  periodLabel: { marginBottom: 8 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   chartCard: { alignItems: 'center' },
   legend: { width: '100%', marginTop: 8 },

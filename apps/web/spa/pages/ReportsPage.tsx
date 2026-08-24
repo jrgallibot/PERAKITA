@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatCurrency } from '@perakita/shared';
+import {
+  REPORT_PERIOD_OPTIONS,
+  formatCurrency,
+  type ReportPeriod,
+} from '@perakita/shared';
 import { AppHeader } from '@/components/AppHeader';
 import { BudgetProgressBars } from '@/components/charts/BudgetProgressBars';
 import { SpendingDonut } from '@/components/charts/SpendingDonut';
 import { TrendBarChart } from '@/components/charts/TrendBarChart';
+import { useToast } from '@/components/Toast';
 import { useAuth } from '@/spa/AuthProvider';
 import { loadStatsDashboard, type WebStatsDashboard } from '@/lib/finance';
+import { sendFinanceReportEmail } from '@/lib/reportEmail';
 
 function StatCard({
   label,
@@ -37,23 +43,26 @@ function StatCard({
   );
 }
 
-export function DashboardPage() {
+export function ReportsPage() {
   const { user } = useAuth();
+  const notify = useToast();
+  const [period, setPeriod] = useState<ReportPeriod>('monthly');
   const [stats, setStats] = useState<WebStatsDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [emailing, setEmailing] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
-    loadStatsDashboard(user.id, 'monthly')
+    loadStatsDashboard(user.id, period)
       .then((data) => {
         if (!cancelled) setStats(data);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load reports');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -61,9 +70,29 @@ export function DashboardPage() {
     return () => {
       cancelled = true;
     };
+  }, [user?.id, period]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void sendFinanceReportEmail({ mode: 'auto_if_due' }).catch(() => {
+      // Auto email is best-effort (needs online + RESEND_API_KEY).
+    });
   }, [user?.id]);
 
   const fmt = formatCurrency;
+
+  const emailReport = () => {
+    if (!stats) return;
+    setEmailing(true);
+    void sendFinanceReportEmail({ mode: 'send_now', period })
+      .then((result) =>
+        notify.success(`Report emailed to ${result.emailed ?? user?.email ?? 'your inbox'}`)
+      )
+      .catch((err: unknown) =>
+        notify.error(err instanceof Error ? err.message : 'Could not send report email')
+      )
+      .finally(() => setEmailing(false));
+  };
 
   return (
     <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
@@ -71,26 +100,55 @@ export function DashboardPage() {
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Dashboard</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Reports</h1>
             <p className="mt-1 text-[var(--muted)]">
-              {stats?.monthLabel ?? 'This month'} · overview of balances and activity
+              Daily, weekly, monthly, or yearly · emailed to your account email
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold"
+              disabled={emailing || !stats}
+              onClick={emailReport}
+              type="button"
+            >
+              {emailing ? 'Sending…' : 'Email this report'}
+            </button>
             <Link
               className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold"
-              to="/reports"
+              to="/dashboard"
             >
-              Open reports
+              Dashboard
             </Link>
             <Link
               className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white dark:text-slate-950"
-              to="/manage"
+              to="/settings"
             >
-              Manage finances
+              Email prefs
             </Link>
           </div>
         </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {REPORT_PERIOD_OPTIONS.map((option) => {
+            const selected = period === option.value;
+            return (
+              <button
+                className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${
+                  selected
+                    ? 'border-primary bg-primary text-white dark:text-slate-950'
+                    : 'border-[var(--border)]'
+                }`}
+                key={option.value}
+                onClick={() => setPeriod(option.value)}
+                type="button"
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-sm text-[var(--muted)]">{stats?.monthLabel ?? '…'}</p>
 
         {loading ? (
           <div className="mt-10 flex justify-center">
@@ -102,63 +160,7 @@ export function DashboardPage() {
           </p>
         ) : stats ? (
           <div className="mt-8 space-y-6">
-            {stats.dueToday.items.length > 0 ? (
-              <section
-                className={`rounded-[20px] border p-4 sm:p-5 ${
-                  stats.dueToday.items.some(
-                    (item) => item.reason === 'overdue' || item.reason === 'maturity'
-                  )
-                    ? 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40'
-                    : 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-300">
-                      Due today
-                    </p>
-                    <h2 className="mt-1 text-lg font-bold">
-                      {stats.dueToday.items.length === 1
-                        ? '1 loan needs attention'
-                        : `${stats.dueToday.items.length} loans need attention`}
-                    </h2>
-                  </div>
-                  <Link
-                    className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white dark:text-slate-950"
-                    to="/manage"
-                  >
-                    Open loans
-                  </Link>
-                </div>
-                <ul className="mt-4 space-y-2">
-                  {stats.dueToday.items.slice(0, 5).map((item) => (
-                    <li
-                      className="flex items-center justify-between gap-3 rounded-xl bg-[var(--surface)]/70 px-3 py-2 text-sm"
-                      key={item.id}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">{item.person_name}</p>
-                        <p className="text-xs text-[var(--muted)]">
-                          {item.label}
-                          {item.loan_type === 'debt' ? ' · you owe' : ' · owed to you'}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 font-bold ${
-                          item.loan_type === 'debt'
-                            ? 'text-rose-600 dark:text-rose-400'
-                            : 'text-emerald-600 dark:text-emerald-400'
-                        }`}
-                      >
-                        {fmt(item.remaining_amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <StatCard
                 hint="Income minus expenses only"
                 label="Current balance"
@@ -167,21 +169,30 @@ export function DashboardPage() {
               <StatCard label="Income" tone="income" value={fmt(stats.income)} />
               <StatCard label="Expenses" tone="expense" value={fmt(stats.expenses)} />
               <StatCard
-                label="Net this month"
+                label="Net"
                 tone={stats.net >= 0 ? 'income' : 'expense'}
                 value={`${stats.net >= 0 ? '+' : ''}${fmt(stats.net)}`}
+              />
+              <StatCard
+                hint="Assigned to budgets in this period"
+                label="Budget spend"
+                value={fmt(stats.budgetSpend)}
               />
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-card dark:shadow-card-dark sm:p-6">
                 <h2 className="text-lg font-bold">Cash flow</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">This month · income vs expenses</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {period === 'yearly'
+                    ? 'Income vs expenses by month'
+                    : 'Income vs expenses in this period'}
+                </p>
                 <div className="mt-6">
                   {stats.dailyTrend.some((point) => point.income > 0 || point.expense > 0) ? (
                     <TrendBarChart points={stats.dailyTrend} />
                   ) : (
-                    <p className="text-sm text-[var(--muted)]">No transactions this month.</p>
+                    <p className="text-sm text-[var(--muted)]">No transactions in this period.</p>
                   )}
                 </div>
               </div>
@@ -216,7 +227,7 @@ export function DashboardPage() {
             <section className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-card dark:shadow-card-dark sm:p-6">
                 <h2 className="text-lg font-bold">Budget progress</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">How much of each budget is used</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">How much of each budget plan is used</p>
                 <div className="mt-6">
                   <BudgetProgressBars budgets={stats.budgets} />
                 </div>

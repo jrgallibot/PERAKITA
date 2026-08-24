@@ -5,15 +5,17 @@ import {
   DEFAULT_PAYMENT_METHOD,
   PAYMENT_METHODS,
   buildBudgetStats,
-  buildDailyTrend,
+  buildPeriodTrend,
   buildSpendingBreakdown,
   calculateLoanInterest,
   evaluateKinsenaPayment,
   formatCurrency,
   getDueTodayLoanAlerts,
+  getReportPeriodRange,
   sortPaymentAccounts,
   type BudgetStat,
   type DailyTrendPoint,
+  type ReportPeriod,
   type SpendingSlice,
 } from '@perakita/shared';
 import { supabase } from '@/lib/supabase';
@@ -83,6 +85,8 @@ export function transactionKindLabel(type: string): string {
       return 'Income';
     case 'expense':
       return 'Expense';
+    case 'adjustment':
+      return 'Budget spend (plan only)';
     case 'loan_received':
       return 'Borrowed / collected';
     case 'loan_given':
@@ -100,6 +104,7 @@ export function signedTransactionAmount(type: string, amount: number): number {
   if (type === 'income' || type === 'loan_received') return amount;
   if (
     type === 'expense' ||
+    type === 'adjustment' ||
     type === 'loan_given' ||
     type === 'loan_payment' ||
     type === 'debt_payment'
@@ -324,7 +329,7 @@ export async function loadDashboard(userId: string) {
     .from('transactions')
     .select('amount, transaction_date, budget_id')
     .eq('user_id', userId)
-    .eq('type', 'expense')
+    .in('type', ['expense', 'adjustment'])
     .is('deleted_at', null);
   if (expenseRes.error) throw expenseRes.error;
   const expenseRows = expenseRes.data ?? [];
@@ -374,7 +379,9 @@ export type WebStatsDashboard = {
   income: number;
   expenses: number;
   net: number;
+  budgetSpend: number;
   monthLabel: string;
+  period: ReportPeriod;
   transactionCount: number;
   spending: SpendingSlice[];
   dailyTrend: DailyTrendPoint[];
@@ -385,13 +392,12 @@ export type WebStatsDashboard = {
   dueToday: ReturnType<typeof getDueTodayLoanAlerts>;
 };
 
-export async function loadStatsDashboard(userId: string): Promise<WebStatsDashboard> {
-  const { start, end } = monthRange();
-  const trendStart = new Date();
-  trendStart.setDate(trendStart.getDate() - 13);
-  const trendStartIso = trendStart.toISOString().slice(0, 10);
-  const now = new Date();
-  const monthLabel = now.toLocaleString('en-PH', { month: 'long', year: 'numeric' });
+export async function loadStatsDashboard(
+  userId: string,
+  period: ReportPeriod = 'monthly'
+): Promise<WebStatsDashboard> {
+  const range = getReportPeriodRange(period);
+  const { start, end, label: monthLabel } = range;
 
   const [
     monthTxRes,
@@ -402,6 +408,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
     expenseRes,
     loansRes,
     txCountRes,
+    budgetSpendRes,
   ] = await Promise.all([
     supabase
       .from('transactions')
@@ -430,7 +437,8 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
       .eq('user_id', userId)
       .is('deleted_at', null)
       .in('type', ['income', 'expense'])
-      .gte('transaction_date', trendStartIso),
+      .gte('transaction_date', start)
+      .lte('transaction_date', end),
     supabase
       .from('budgets')
       .select('id, name, period_start, period_end, total_amount')
@@ -441,7 +449,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
       .from('transactions')
       .select('amount, transaction_date, budget_id')
       .eq('user_id', userId)
-      .eq('type', 'expense')
+      .in('type', ['expense', 'adjustment'])
       .is('deleted_at', null),
     supabase
       .from('loans')
@@ -453,6 +461,15 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .is('deleted_at', null),
+    supabase
+      .from('transactions')
+      .select('amount')
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .in('type', ['expense', 'adjustment'])
+      .not('budget_id', 'is', null)
+      .gte('transaction_date', start)
+      .lte('transaction_date', end),
   ]);
 
   if (monthTxRes.error) throw monthTxRes.error;
@@ -463,6 +480,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
   if (expenseRes.error) throw expenseRes.error;
   if (loansRes.error) throw loansRes.error;
   if (txCountRes.error) throw txCountRes.error;
+  if (budgetSpendRes.error) throw budgetSpendRes.error;
 
   const income = (monthTxRes.data ?? [])
     .filter((tx) => tx.type === 'income')
@@ -475,6 +493,7 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
     if (tx.type === 'expense') return sum - num(tx.amount);
     return sum;
   }, 0);
+  const budgetSpend = (budgetSpendRes.data ?? []).reduce((sum, tx) => sum + num(tx.amount), 0);
 
   const spendingMap = new Map<string, { name: string; color: string; total: number }>();
   for (const row of spendingRes.data ?? []) {
@@ -538,16 +557,18 @@ export async function loadStatsDashboard(userId: string): Promise<WebStatsDashbo
     income,
     expenses,
     net: income - expenses,
+    budgetSpend,
     monthLabel,
+    period,
     transactionCount: txCountRes.count ?? 0,
     spending: buildSpendingBreakdown(spendingRows),
-    dailyTrend: buildDailyTrend(
+    dailyTrend: buildPeriodTrend(
       (trendRes.data ?? []).map((row) => ({
         transaction_date: row.transaction_date as string,
         type: row.type as string,
         amount: num(row.amount),
       })),
-      14
+      range
     ),
     budgets,
     loanDebts,
@@ -562,31 +583,40 @@ export async function createWebTransaction(input: {
   accountId: string;
   categoryId: string | null;
   budgetId?: string | null;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'adjustment';
   amount: number;
   description: string;
   date: string;
+  notes?: string | null;
 }): Promise<void> {
   const now = new Date().toISOString();
-  const { data: account, error: accountError } = await supabase
-    .from('accounts')
-    .select('current_balance')
-    .eq('id', input.accountId)
-    .single();
-  if (accountError) throw accountError;
+  const affectsBalance = input.type === 'income' || input.type === 'expense';
+  let nextBalance: number | null = null;
 
-  const nextBalance =
-    num(account?.current_balance) + (input.type === 'income' ? input.amount : -input.amount);
+  if (affectsBalance) {
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('current_balance')
+      .eq('id', input.accountId)
+      .single();
+    if (accountError) throw accountError;
+    nextBalance =
+      num(account?.current_balance) + (input.type === 'income' ? input.amount : -input.amount);
+  }
+
+  const budgetId =
+    input.type === 'expense' || input.type === 'adjustment' ? (input.budgetId ?? null) : null;
 
   const { error: txError } = await supabase.from('transactions').insert({
     id: crypto.randomUUID(),
     user_id: input.userId,
     account_id: input.accountId,
     category_id: input.categoryId,
-    budget_id: input.type === 'expense' ? (input.budgetId ?? null) : null,
+    budget_id: budgetId,
     type: input.type,
     amount: input.amount,
     description: input.description || input.type,
+    notes: input.notes ?? null,
     transaction_date: input.date,
     created_at: now,
     updated_at: now,
@@ -597,11 +627,78 @@ export async function createWebTransaction(input: {
   });
   if (txError) throw txError;
 
-  const { error: updateError } = await supabase
-    .from('accounts')
-    .update({ current_balance: nextBalance, updated_at: now, sync_status: 'updated' })
-    .eq('id', input.accountId);
-  if (updateError) throw updateError;
+  if (nextBalance !== null) {
+    const { error: updateError } = await supabase
+      .from('accounts')
+      .update({ current_balance: nextBalance, updated_at: now, sync_status: 'updated' })
+      .eq('id', input.accountId);
+    if (updateError) throw updateError;
+  }
+}
+
+/** Convert older budget-tab expenses (that hit Current Balance) into plan-only adjustments. */
+export async function repairWebBudgetTrackSpends(userId: string): Promise<number> {
+  const [{ data: budgets, error: budgetsError }, { data: txs, error: txError }] = await Promise.all([
+    supabase
+      .from('budgets')
+      .select('id, name')
+      .eq('user_id', userId)
+      .is('deleted_at', null),
+    supabase
+      .from('transactions')
+      .select('id, account_id, amount, budget_id, description, notes')
+      .eq('user_id', userId)
+      .eq('type', 'expense')
+      .is('deleted_at', null)
+      .not('budget_id', 'is', null),
+  ]);
+  if (budgetsError) throw budgetsError;
+  if (txError) throw txError;
+
+  const budgetNameById = new Map(
+    (budgets ?? []).map((b) => [b.id as string, (b.name as string) ?? ''])
+  );
+  const rows = (txs ?? []).filter((row) => {
+    const notes = ((row.notes as string) ?? '').trim();
+    if (notes.startsWith('Budget spend')) return true;
+    // Web budget-tab spends used "Category · BudgetName" and had no notes.
+    const budgetName = budgetNameById.get((row.budget_id as string) ?? '');
+    if (!budgetName) return false;
+    const description = ((row.description as string) ?? '').trim();
+    return description.endsWith(` · ${budgetName}`) && !notes;
+  });
+  if (rows.length === 0) return 0;
+
+  const now = new Date().toISOString();
+  for (const row of rows) {
+    const { error: updateTxError } = await supabase
+      .from('transactions')
+      .update({
+        type: 'adjustment',
+        notes: 'Budget track only — not from Current Balance',
+        updated_at: now,
+        sync_status: 'updated',
+      })
+      .eq('id', row.id);
+    if (updateTxError) throw updateTxError;
+
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('current_balance')
+      .eq('id', row.account_id)
+      .single();
+    if (accountError) throw accountError;
+    const { error: balError } = await supabase
+      .from('accounts')
+      .update({
+        current_balance: num(account?.current_balance) + num(row.amount),
+        updated_at: now,
+        sync_status: 'updated',
+      })
+      .eq('id', row.account_id);
+    if (balError) throw balError;
+  }
+  return rows.length;
 }
 
 export async function createWebPaymentMode(input: { userId: string; name: string }): Promise<string> {

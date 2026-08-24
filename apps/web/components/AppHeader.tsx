@@ -11,6 +11,7 @@ export function AppHeader() {
   const onSettings = location.pathname === '/settings';
   const onManage = location.pathname === '/manage';
   const onDashboard = location.pathname === '/dashboard';
+  const onReports = location.pathname === '/reports';
 
   const navLinkClass = (active: boolean) =>
     `rounded-xl border px-3 py-2 text-sm font-semibold sm:px-4 ${
@@ -32,6 +33,9 @@ export function AppHeader() {
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Link className={navLinkClass(onDashboard)} to="/dashboard">
             Dashboard
+          </Link>
+          <Link className={navLinkClass(onReports)} to="/reports">
+            Reports
           </Link>
           <Link className={navLinkClass(onManage)} to="/manage">
             Manage

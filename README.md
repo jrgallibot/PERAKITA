@@ -76,6 +76,19 @@ node scripts/push-email-templates.cjs
 
 Create a token at [Account tokens](https://supabase.com/dashboard/account/tokens).
 
+### Finance report emails (auto notify)
+
+Reports are sent by the Edge Function `send-finance-report` to the user’s **auth account email** (the same address in Settings). Enable auto-send and frequency under **Settings → Report email notifications**.
+
+Supabase Auth templates only cover signup/reset. Custom report mail uses Resend (Supabase’s documented approach):
+
+1. Create an API key at [resend.com](https://resend.com/api-keys)
+2. In Supabase → **Project Settings → Edge Functions → Secrets**, add:
+   - `RESEND_API_KEY` = your Resend key
+   - optional `REPORT_FROM_EMAIL` = `PeraKita <you@your-verified-domain.com>` (defaults to Resend’s onboarding sender for tests)
+
+Until that secret is set, “Email me now” will explain that `RESEND_API_KEY` is missing.
+
 ## Development
 
 ```bash

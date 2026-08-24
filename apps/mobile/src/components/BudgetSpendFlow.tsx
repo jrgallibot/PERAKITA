@@ -5,7 +5,7 @@ import { AppText, Badge, Card } from '@/components/ui';
 
 export function BudgetSpendFlow({
   entries,
-  emptyLabel = 'Nothing added to this budget yet.',
+  emptyLabel = 'No spend recorded for this budget yet.',
 }: {
   entries: BudgetSpendSummary[];
   emptyLabel?: string;
@@ -34,15 +34,15 @@ export function BudgetSpendFlow({
           <Card style={styles.card}>
             <View style={styles.head}>
               <AppText variant="caption" muted>
-                Added {item.step}
+                Spend {item.step}
               </AppText>
               <Badge
-                label={item.overBudget ? 'Over plan' : 'Added to budget'}
+                label={item.overBudget ? 'Over budget' : 'Within budget'}
                 variant={item.overBudget ? 'danger' : 'success'}
               />
             </View>
-            <AppText style={[styles.amount, { color: colors.income }]}>
-              {formatCurrency(item.amount, { showSign: true })}
+            <AppText style={[styles.amount, { color: colors.expense }]}>
+              {formatCurrency(-item.amount)}
             </AppText>
             <AppText muted variant="caption">
               {item.spendDate} · {item.category} · via {item.method}
@@ -53,11 +53,10 @@ export function BudgetSpendFlow({
               </AppText>
             ) : null}
             <AppText style={styles.runningTotal}>
-              Full total {formatCurrency(item.planTotal + item.spentToDate, { showSign: true })}
+              Budget left {formatCurrency(item.remainingAfter)}
             </AppText>
             <AppText muted variant="caption">
-              plan {formatCurrency(item.planTotal)} + expenses{' '}
-              {formatCurrency(item.spentToDate, { showSign: true })}
+              plan {formatCurrency(item.planTotal)} · spent {formatCurrency(item.spentToDate)}
             </AppText>
           </Card>
         </View>
