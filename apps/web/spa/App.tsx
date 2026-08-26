@@ -13,6 +13,8 @@ import { DashboardPage } from '@/spa/pages/DashboardPage';
 import { ReportsPage } from '@/spa/pages/ReportsPage';
 import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
 import { SettingsPage } from '@/spa/pages/SettingsPage';
+import { GoalsPage } from '@/spa/pages/GoalsPage';
+import { AssistantPage } from '@/spa/pages/AssistantPage';
 import { ToastProvider } from '@/components/Toast';
 import { Providers } from '@/components/Providers';
 
@@ -88,6 +90,22 @@ export function SpaApp() {
                   </ProtectedRoute>
                 }
                 path="/manage"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <GoalsPage />
+                  </ProtectedRoute>
+                }
+                path="/goals"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AssistantPage />
+                  </ProtectedRoute>
+                }
+                path="/assistant"
               />
               <Route
                 element={

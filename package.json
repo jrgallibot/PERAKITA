@@ -8,10 +8,12 @@
   ],
   "scripts": {
     "dev:mobile": "pnpm --filter @perakita/mobile dev",
+    "dev:mobile:clean": "pnpm --filter @perakita/mobile run start:clean",
     "dev:web": "pnpm --filter @perakita/web dev",
     "typecheck": "pnpm --filter @perakita/shared --filter @perakita/mobile --filter @perakita/web run typecheck",
     "lint": "pnpm -r lint",
-    "email:build": "node scripts/build-email-templates.cjs"
+    "email:build": "node scripts/build-email-templates.cjs",
+    "cursor:verify": "node scripts/verify-cursor-api.cjs"
   },
   "engines": {
     "node": ">=22.13"

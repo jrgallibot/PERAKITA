@@ -2,9 +2,12 @@ import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from '@/providers/ThemeProvider';
 import { fonts } from '@/theme/fonts';
+import { isOnboardingComplete } from '@/services/pesoEngineService';
+import { usePesoNotificationScheduler } from '@/hooks/usePesoNotificationScheduler';
 
 export default function TabsLayout() {
   const user = useAuthStore((s) => s.user);
@@ -12,7 +15,15 @@ export default function TabsLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  if (!initialized) {
+  const { data: onboarded, isLoading } = useQuery({
+    queryKey: ['onboarding', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => isOnboardingComplete(user!.id),
+  });
+
+  usePesoNotificationScheduler(user?.id);
+
+  if (!initialized || (user && isLoading)) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.primary} />
@@ -22,6 +33,10 @@ export default function TabsLayout() {
 
   if (!user) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  if (onboarded === false) {
+    return <Redirect href={'/(onboarding)/' as never} />;
   }
 
   return (
@@ -75,30 +90,32 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="budgets"
         options={{
-          title: 'Budgets',
+          title: 'Budget',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons color={color} name={focused ? 'pie-chart' : 'pie-chart-outline'} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="loans"
+        name="goals"
         options={{
-          title: 'Loans',
+          title: 'Goals',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons color={color} name={focused ? 'people' : 'people-outline'} size={size} />
+            <Ionicons color={color} name={focused ? 'flag' : 'flag-outline'} size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="reports"
+        name="more"
         options={{
-          title: 'Reports',
+          title: 'More',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons color={color} name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} />
+            <Ionicons color={color} name={focused ? 'grid' : 'grid-outline'} size={size} />
           ),
         }}
       />
+      <Tabs.Screen name="loans" options={{ href: null }} />
+      <Tabs.Screen name="reports" options={{ href: null }} />
     </Tabs>
   );
 }

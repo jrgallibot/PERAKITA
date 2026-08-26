@@ -15,9 +15,5 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.disableHierarchicalLookup = false;
 config.resolver.unstable_enableSymlinks = true;
-config.resolver.extraNodeModules = {
-  ...(config.resolver.extraNodeModules ?? {}),
-  'expo-image-picker': path.resolve(projectRoot, 'node_modules/expo-image-picker'),
-};
 
 module.exports = config;

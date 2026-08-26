@@ -12,6 +12,7 @@ import { accountRepository } from '@/database/repositories/accountRepository';
 import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { categoryRepository } from '@/database/repositories/categoryRepository';
 import { transactionRepository } from '@/database/repositories/transactionRepository';
+import { achievementRepository } from '@/database/repositories/achievementRepository';
 
 function today(): string {
   const now = new Date();
@@ -108,6 +109,7 @@ export default function AddTransactionScreen() {
 
     setSaving(true);
     try {
+      const account = accounts.find((a) => a.id === accountId);
       await transactionRepository.create(user.id, {
         account_id: accountId,
         category_id: categoryId,
@@ -116,9 +118,14 @@ export default function AddTransactionScreen() {
         amount: parsed,
         description: description.trim() || selectedCategory?.name || type,
         transaction_date: date || today(),
+        payment_method: account?.name ?? 'Cash',
       });
+      if (type === 'expense') {
+        await achievementRepository.unlock(user.id, 'first_expense');
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['peso-dashboard'] }),
         queryClient.invalidateQueries({ queryKey: ['transactions'] }),
         queryClient.invalidateQueries({ queryKey: ['accounts'] }),
         queryClient.invalidateQueries({ queryKey: ['budgets'] }),

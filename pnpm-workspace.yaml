@@ -3,6 +3,7 @@ packages:
   - "packages/*"
 nodeLinker: hoisted
 allowBuilds:
+  esbuild: true
   sharp: true
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.16'

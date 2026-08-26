@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,6 +12,7 @@ import { ToastHost } from '@/components/ui/ToastHost';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { useNetworkMonitor } from '@/hooks/useNetworkMonitor';
 import { useSyncEngine } from '@/hooks/useSyncEngine';
+import { PinLockGate } from '@/hooks/usePinLock';
 import { useTheme } from '@/providers/ThemeProvider';
 
 const queryClient = new QueryClient();
@@ -26,6 +29,7 @@ function RootNav() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="activity-log" options={{ presentation: 'modal' }} />
@@ -33,6 +37,11 @@ function RootNav() {
         <Stack.Screen name="add-loan" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-loan-payment" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-budget" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-goal" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="add-contribution" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="goal/[id]" />
+        <Stack.Screen name="add-recurring-expense" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="ai-assistant" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );
@@ -45,7 +54,9 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <FontProvider>
-              <RootNav />
+              <PinLockGate>
+                <RootNav />
+              </PinLockGate>
               <ToastHost />
             </FontProvider>
           </ThemeProvider>

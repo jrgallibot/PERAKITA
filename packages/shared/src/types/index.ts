@@ -51,6 +51,12 @@ export interface Profile {
   report_email_enabled: boolean;
   report_email_period: 'daily' | 'weekly' | 'monthly' | 'yearly';
   report_email_last_sent_at: string | null;
+  notify_enabled: boolean;
+  notify_bills: boolean;
+  notify_loans: boolean;
+  notify_budget: boolean;
+  notify_safe_to_spend: boolean;
+  notify_goals: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +100,7 @@ export interface Transaction extends SyncMetadata {
   notes: string | null;
   transaction_date: string;
   transfer_to_account_id: string | null;
+  payment_method: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -13,8 +13,8 @@ interface NetworkState {
 }
 
 export const useNetworkStore = create<NetworkState>((set) => ({
-  isConnected: true,
-  syncStatus: 'synced',
+  isConnected: false,
+  syncStatus: 'offline',
   pendingCount: 0,
   setConnected: (connected) =>
     set((state) => ({

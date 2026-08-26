@@ -1,14 +1,22 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from '@/providers/ThemeProvider';
+import { isOnboardingComplete } from '@/services/pesoEngineService';
 
 export default function Index() {
   const user = useAuthStore((s) => s.user);
   const initialized = useAuthStore((s) => s.initialized);
   const { colors } = useTheme();
 
-  if (!initialized) {
+  const { data: onboarded, isLoading } = useQuery({
+    queryKey: ['onboarding', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => isOnboardingComplete(user!.id),
+  });
+
+  if (!initialized || (user && isLoading)) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -17,6 +25,9 @@ export default function Index() {
   }
 
   if (user) {
+    if (onboarded === false) {
+      return <Redirect href={'/(onboarding)/' as never} />;
+    }
     return <Redirect href="/(tabs)/home" />;
   }
 

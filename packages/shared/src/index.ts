@@ -8,3 +8,4 @@ export * from './validation/index';
 export * from './calculations/index';
 export * from './stats/index';
 export * from './stats/reporting';
+export * from './peso/index';

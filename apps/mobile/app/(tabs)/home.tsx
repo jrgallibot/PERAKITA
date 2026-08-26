@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import {
   Linking,
@@ -9,7 +9,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { formatCurrency, getDueTodayLoanAlerts } from '@perakita/shared';
+import { formatCurrency, getDueTodayLoanAlerts, buildPesoNotificationAlerts } from '@perakita/shared';
+import { profileToNotificationPrefs } from '@/services/settingsService';
+import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { useAuthStore } from '@/stores/authStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -17,6 +19,8 @@ import { transactionRepository } from '@/database/repositories/transactionReposi
 import { loanRepository } from '@/database/repositories/loanRepository';
 import { getProfile } from '@/services/settingsService';
 import { syncNow } from '@/services/syncService';
+import { loadPesoDashboard } from '@/services/pesoEngineService';
+import { loadGoalsDashboard } from '@/services/savingsGoalService';
 import {
   Screen,
   Card,
@@ -31,6 +35,16 @@ import {
   SectionHeader,
   TransactionRow,
 } from '@/components/ui';
+import {
+  SafeToSpendCard,
+  ForecastWarningBanner,
+  HealthScoreRing,
+  UpcomingBillsList,
+  SpendingRiskAlert,
+  AiInsightCard,
+  NotificationAlertsList,
+  SavingsGoalsDashboardSection,
+} from '@/components/peso';
 import { DueTodayBanner } from '@/components/DueTodayBanner';
 import { SpendingDonut } from '@/components/charts/SpendingDonut';
 import { signedTransactionAmount } from '@/lib/transactionLabels';
@@ -63,29 +77,61 @@ export default function HomeScreen() {
   const pendingCount = useNetworkStore((s) => s.pendingCount);
   const isTablet = width >= 768;
   const month = monthRange();
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
+  const openAssistant = (question?: string) => {
+    if (question) {
+      router.push({ pathname: '/ai-assistant', params: { q: question } } as never);
+      return;
+    }
+    router.push('/ai-assistant' as never);
+  };
 
   const { data, refetch, isRefetching } = useQuery({
-    queryKey: ['dashboard', user?.id],
+    queryKey: ['peso-dashboard', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const [balance, totals, profile, transactions, spending, loans] = await Promise.all([
-        transactionRepository.getIncomeExpenseBalance(user!.id),
-        transactionRepository.getMonthlyTotals(user!.id, month.start, month.end),
+      const [peso, profile, transactions, spending, loans, budgets, goalsData] = await Promise.all([
+        loadPesoDashboard(user!.id),
         getProfile(user!.id),
         transactionRepository.findAll(user!.id, 5),
         transactionRepository.getSpendingBreakdown(user!.id, month.start, month.end),
         loanRepository.findAll(user!.id),
+        budgetRepository.findAllWithProgress(user!.id),
+        loadGoalsDashboard(user!.id),
       ]);
-      return { balance, totals, profile, transactions, spending, loans };
+      return { peso, profile, transactions, spending, loans, budgets, goalsData };
     },
   });
 
-  const balance = data?.balance ?? 0;
-  const income = data?.totals.income ?? 0;
-  const expenses = data?.totals.expenses ?? 0;
+  const peso = data?.peso;
   const transactions = data?.transactions ?? [];
   const spending = data?.spending ?? [];
   const dueToday = getDueTodayLoanAlerts(data?.loans ?? []);
+  const notificationAlerts = useMemo(() => {
+    if (!peso || !data?.profile) return [];
+    const prefs = profileToNotificationPrefs(data.profile);
+    const budgetRows = (data.budgets ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      percent: b.percent,
+    }));
+    const goalRows = (data.goalsData?.enriched ?? [])
+      .filter((item) => !item.goal.is_archived)
+      .map((item) => ({
+        id: item.goal.id,
+        name: item.goal.name,
+        status: item.status,
+        progressPercentage: item.calculations.progressPercentage,
+        remainingAmount: item.calculations.remainingAmount,
+        targetDate: item.goal.target_date,
+        daysRemaining: item.calculations.daysRemaining,
+        requiredDaily: item.calculations.requiredDailySavings,
+      }));
+    return buildPesoNotificationAlerts(peso, prefs, budgetRows, goalRows).filter(
+      (alert) => !dismissedAlerts.includes(alert.id),
+    );
+  }, [peso, data?.profile, data?.budgets, data?.goalsData, dismissedAlerts]);
 
   const syncLabel = !isConnected
     ? 'Offline Mode'
@@ -124,7 +170,7 @@ export default function HomeScreen() {
             <View style={styles.identity}>
               <BrandLogo showLabel size={40} />
               <AppText muted variant="caption">
-                {getGreeting()} · {month.label}
+                {getGreeting()} · Know where your money goes
               </AppText>
               <AppText variant="display" style={styles.name}>
                 {name}
@@ -141,25 +187,71 @@ export default function HomeScreen() {
 
         <View style={[styles.content, isTablet && styles.contentTablet]}>
           <HeroBalanceCard
-            amount={balance}
+            amount={peso?.currentBalance ?? 0}
             badge="Live"
-            hint="Income minus expenses only. Loan debts stay on Loans."
+            hint="Income minus expenses. Loan debts tracked separately."
             label="Current balance"
           />
+
+          {peso ? (
+            <SafeToSpendCard
+              daysUntilPayday={peso.daysUntilPayday}
+              realAvailable={peso.realAvailable}
+              safeToSpendToday={peso.safeToSpendToday}
+            />
+          ) : null}
+
+          <NotificationAlertsList
+            alerts={notificationAlerts}
+            onDismiss={(id) => setDismissedAlerts((prev) => [...prev, id])}
+          />
+
+          <SpendingRiskAlert
+            onFixPress={() => openAssistant('Why is my balance going down quickly?')}
+            risk={peso?.spendingRisk ?? { detected: false, severity: 'none', message: null }}
+          />
+
+          {peso?.forecast.warning ? (
+            <ForecastWarningBanner
+              message={peso.forecast.warning}
+              onFixPress={() => openAssistant('Why is my balance going down quickly?')}
+            />
+          ) : null}
 
           <DueTodayBanner alerts={dueToday} />
 
           <View style={styles.statsRow}>
-            <StatCard amount={income} icon="trending-up-outline" label="Income" tone="income" />
-            <StatCard amount={expenses} icon="trending-down-outline" label="Expenses" tone="expense" />
             <StatCard
-              amount={income - expenses}
-              icon="analytics-outline"
-              label="Net"
-              showSign
-              tone={income - expenses >= 0 ? 'income' : 'expense'}
+              amount={peso?.monthlyIncome ?? 0}
+              icon="trending-up-outline"
+              label="Income"
+              tone="income"
+            />
+            <StatCard
+              amount={peso?.monthlyExpenses ?? 0}
+              icon="trending-down-outline"
+              label="Expenses"
+              tone="expense"
+            />
+            <StatCard
+              icon="calendar-outline"
+              label="Days to payday"
+              value={String(peso?.daysUntilPayday ?? 0)}
             />
           </View>
+
+          {peso ? <HealthScoreRing health={peso.healthScore} /> : null}
+
+          {user?.id ? <AiInsightCard userId={user.id} /> : null}
+
+          {data?.goalsData ? (
+            <SavingsGoalsDashboardSection
+              summary={data.goalsData.summary}
+              topGoals={data.goalsData.enriched.filter((g) => !g.goal.is_completed && !g.goal.is_archived)}
+            />
+          ) : null}
+
+          {peso ? <UpcomingBillsList bills={peso.upcomingBills} /> : null}
 
           <SectionHeader eyebrow="Actions" subtitle="Record money in seconds" title="Quick actions" />
           <QuickActionGrid
@@ -177,16 +269,16 @@ export default function HomeScreen() {
                 onPress: () => router.push('/add-transaction?type=income' as never),
               },
               {
-                label: 'Loan',
-                icon: 'people-outline',
-                tone: 'loan',
-                onPress: () => router.push('/add-loan' as never),
+                label: 'Goal',
+                icon: 'flag-outline',
+                tone: 'budget',
+                onPress: () => router.push('/add-goal' as never),
               },
               {
-                label: 'Budget',
-                icon: 'pie-chart-outline',
-                tone: 'budget',
-                onPress: () => router.push('/add-budget' as never),
+                label: 'AI Help',
+                icon: 'chatbubble-ellipses-outline',
+                tone: 'loan',
+                onPress: openAssistant,
               },
             ]}
           />
@@ -200,9 +292,9 @@ export default function HomeScreen() {
           <Card compact>
             {transactions.length === 0 ? (
               <EmptyState
-                actionLabel="Add expense"
+                actionLabel="Add your first transaction"
                 icon="wallet-outline"
-                message="Your recent activity will show up here."
+                message="Your financial journey starts here."
                 onAction={() => router.push('/add-transaction?type=expense' as never)}
                 title="No transactions yet"
               />
@@ -272,9 +364,9 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   identity: { flex: 1, gap: 8, paddingRight: 8 },
   name: { fontSize: 26, lineHeight: 32 },
-  content: { paddingHorizontal: 20, paddingTop: 16 },
+  content: { paddingHorizontal: 20, paddingTop: 16, gap: 16 },
   contentTablet: { maxWidth: 720, alignSelf: 'center', width: '100%' },
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chartCard: { alignItems: 'center' },
   legend: { width: '100%', gap: 0, marginTop: 8 },
   legendRow: {

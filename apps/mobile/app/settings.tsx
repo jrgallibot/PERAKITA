@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  AppState,
   Image,
   Linking,
   Platform,
@@ -27,6 +28,8 @@ import {
   type ReportPeriod,
   type Sex,
   type ThemeMode,
+  type NotificationPrefs,
+  DEFAULT_NOTIFICATION_PREFS,
 } from '@perakita/shared';
 import { signOutAll, syncPendingAuth } from '@/services/authService';
 import {  changePassword,
@@ -39,6 +42,16 @@ import {  changePassword,
 } from '@/services/settingsService';
 import { sendFinanceReportEmail } from '@/services/reportEmailService';
 import { clearAllFinanceData, resetCurrentBalance } from '@/services/clearDataService';
+import { setPin, setBiometricEnabled, isBiometricEnabled, hasPin } from '@/services/pinLockService';
+import { isBiometricLoginEnabled } from '@/services/biometricCredentialStore';
+import {
+  getBiometricSupport,
+  type BiometricSupport,
+} from '@/services/biometricLoginService';
+import { disableQuickLogin, enableQuickLogin } from '@/services/quickLoginService';
+import { loadDemoSeed } from '@/services/demoSeedService';
+import { saveAndSyncNotifications } from '@/hooks/usePesoNotificationScheduler';
+import { profileToNotificationPrefs } from '@/services/settingsService';
 import { syncNow, getSyncDestinationLabel } from '@/services/syncService';
 import { notify } from '@/stores/toastStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -111,6 +124,15 @@ export default function SettingsScreen() {
   const [reportEmailPeriod, setReportEmailPeriod] = useState<ReportPeriod>('monthly');
   const [savingReportPrefs, setSavingReportPrefs] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [biometricUnlockEnabled, setBiometricUnlockEnabled] = useState(false);
+  const [biometricLoginEnabled, setBiometricLoginEnabled] = useState(false);
+  const [biometricSupport, setBiometricSupport] = useState<BiometricSupport | null>(null);
+  const [biometricPassword, setBiometricPassword] = useState('');
+  const [pinSaved, setPinSaved] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [notifyPrefs, setNotifyPrefs] = useState<NotificationPrefs>({ ...DEFAULT_NOTIFICATION_PREFS });
+  const [savingNotifyPrefs, setSavingNotifyPrefs] = useState(false);
 
   const { data: logs = [] } = useQuery({
     queryKey: ['transactions', user?.id, 'settings-log'],
@@ -145,7 +167,29 @@ export default function SettingsScreen() {
     setAvatarUrl(profile.avatar_url);
     setReportEmailEnabled(profile.report_email_enabled);
     setReportEmailPeriod(profile.report_email_period);
+    setNotifyPrefs(profileToNotificationPrefs(profile));
   }, [profile]);
+
+  useEffect(() => {
+    const refreshSecurity = async () => {
+      const [support, unlockEnabled, loginEnabled, savedPin] = await Promise.all([
+        getBiometricSupport(),
+        isBiometricEnabled(),
+        isBiometricLoginEnabled(),
+        hasPin(),
+      ]);
+      setBiometricSupport(support);
+      setBiometricUnlockEnabled(unlockEnabled);
+      setBiometricLoginEnabled(loginEnabled);
+      setPinSaved(savedPin);
+    };
+
+    void refreshSecurity();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshSecurity();
+    });
+    return () => sub.remove();
+  }, []);
 
   const age = useMemo(() => ageFromBirthday(birthday || null), [birthday]);
   const initials = (displayName || user?.email || '?').trim().slice(0, 1).toUpperCase();
@@ -305,7 +349,7 @@ export default function SettingsScreen() {
                 ]);
                 if (isConnected) {
                   try {
-                    await syncNow();
+                    await syncNow(user.id);
                   } catch {
                     // Local + cloud clear already attempted.
                   }
@@ -359,7 +403,7 @@ export default function SettingsScreen() {
                         ]);
                         if (isConnected) {
                           try {
-                            await syncNow();
+                            await syncNow(user.id);
                           } catch {
                             // Local + cloud clear already attempted.
                           }
@@ -583,8 +627,250 @@ export default function SettingsScreen() {
 
       <Card style={styles.section}>
         <AppText muted variant="caption">
+          PUSH NOTIFICATIONS
+        </AppText>
+        <AppText muted>
+          Reminders for bills, loans, budgets, and daily safe-to-spend. In Expo Go, alerts show on
+          Home instead of device push. Use a development build for scheduled push notifications.
+        </AppText>
+        <Pressable
+          onPress={() => setNotifyPrefs((p) => ({ ...p, enabled: !p.enabled }))}
+          style={[
+            styles.sexBtn,
+            {
+              backgroundColor: notifyPrefs.enabled ? colors.primary : colors.inputBackground,
+              borderColor: colors.border,
+              alignSelf: 'flex-start',
+              paddingHorizontal: 14,
+              marginTop: 8,
+            },
+          ]}
+        >
+          <Text style={{ color: notifyPrefs.enabled ? '#FFFFFF' : colors.textPrimary, fontWeight: '700' }}>
+            {notifyPrefs.enabled ? 'Notifications ON' : 'Notifications OFF'}
+          </Text>
+        </Pressable>
+        {(
+          [
+            { key: 'bills' as const, label: 'Recurring bills' },
+            { key: 'loans' as const, label: 'Loan due dates' },
+            { key: 'budget' as const, label: 'Budget warnings (85%+)' },
+            { key: 'safeToSpend' as const, label: 'Daily safe-to-spend' },
+          ] as const
+        ).map((item) => (
+          <Pressable
+            key={item.key}
+            disabled={!notifyPrefs.enabled}
+            onPress={() => setNotifyPrefs((p) => ({ ...p, [item.key]: !p[item.key] }))}
+            style={[
+              styles.sexBtn,
+              {
+                backgroundColor: notifyPrefs[item.key] ? colors.primaryMuted : colors.inputBackground,
+                borderColor: colors.border,
+                alignSelf: 'flex-start',
+                paddingHorizontal: 14,
+                marginTop: 8,
+                opacity: notifyPrefs.enabled ? 1 : 0.45,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 12 }}>
+              {notifyPrefs[item.key] ? '✓ ' : ''}
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
+        <Button
+          loading={savingNotifyPrefs}
+          onPress={() => {
+            if (!user?.id) return;
+            setSavingNotifyPrefs(true);
+            void saveAndSyncNotifications(user.id, notifyPrefs)
+              .then(() => notify.success('Notification preferences saved'))
+              .catch((error) =>
+                notify.error(error instanceof Error ? error.message : 'Could not save notifications')
+              )
+              .finally(() => setSavingNotifyPrefs(false));
+          }}
+          title="Save notification prefs"
+        />
+      </Card>
+
+      <Card style={styles.section}>
+        <AppText muted variant="caption">
+          PESO DEMO
+        </AppText>
+        <AppText muted variant="caption" style={{ marginBottom: 8 }}>
+          Load hackathon demo data (₱25k salary scenario) for presentations.
+        </AppText>
+        <Button
+          loading={loadingDemo}
+          title="Load demo data"
+          variant="secondary"
+          onPress={() => {
+            if (!user?.id) return;
+            Alert.alert('Load demo data?', 'This adds sample transactions, goals, and recurring bills.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Load',
+                onPress: () => {
+                  setLoadingDemo(true);
+                  void loadDemoSeed(user.id)
+                    .then(async () => {
+                      await queryClient.invalidateQueries();
+                      notify.success('Demo data loaded');
+                    })
+                    .catch((error) =>
+                      notify.error(error instanceof Error ? error.message : 'Demo load failed')
+                    )
+                    .finally(() => setLoadingDemo(false));
+                },
+              },
+            ]);
+          }}
+        />
+      </Card>
+
+      <Card style={styles.section}>
+        <AppText muted variant="caption">
           SECURITY
         </AppText>
+
+        <AppText variant="subtitle">App lock</AppText>
+        <AppText muted variant="caption">
+          PIN locks the app when you switch away. Fingerprint unlocks it when you return.
+        </AppText>
+        <Input
+          label="App PIN (4–6 digits)"
+          keyboardType="number-pad"
+          secureTextEntry
+          value={newPin}
+          onChangeText={setNewPin}
+        />
+        <Button
+          title="Save PIN"
+          variant="secondary"
+          onPress={() => {
+            void setPin(newPin)
+              .then(async () => {
+                notify.success('PIN saved');
+                setNewPin('');
+                setPinSaved(true);
+                if (user?.email && biometricPassword.trim()) {
+                  await enableQuickLogin(user.email, biometricPassword);
+                  setBiometricLoginEnabled(true);
+                  setBiometricPassword('');
+                  notify.success('PIN login is ready on the login screen');
+                }
+              })
+              .catch((error) => notify.error(error instanceof Error ? error.message : 'Invalid PIN'));
+          }}
+        />
+        {pinSaved ? (
+          <AppText color={colors.primary} variant="caption">
+            ✓ App PIN saved
+          </AppText>
+        ) : null}
+
+        {biometricSupport ? (
+          <Pressable
+            onPress={() => {
+              void (async () => {
+                if (biometricUnlockEnabled) {
+                  await setBiometricEnabled(false);
+                  setBiometricUnlockEnabled(false);
+                  notify.success('Fingerprint app unlock disabled');
+                  return;
+                }
+                if (!(await hasPin())) {
+                  notify.error('Save a PIN above first');
+                  return;
+                }
+                try {
+                  await setBiometricEnabled(true);
+                  setBiometricUnlockEnabled(true);
+                  notify.success(`${biometricSupport.label} app unlock enabled`);
+                } catch (error) {
+                  notify.error(error instanceof Error ? error.message : 'Could not enable app unlock');
+                }
+              })();
+            }}
+            style={[
+              styles.toggleRow,
+              {
+                borderColor: colors.border,
+                backgroundColor: biometricUnlockEnabled ? colors.primaryMuted : colors.inputBackground,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.textPrimary, flex: 1 }}>
+              {biometricUnlockEnabled ? '✓ ' : ''}
+              {biometricSupport.label} app unlock
+            </Text>
+            <AppText muted variant="caption">
+              {biometricUnlockEnabled ? 'ON' : 'OFF'}
+            </AppText>
+          </Pressable>
+        ) : null}
+
+        <AppText variant="subtitle" style={{ marginTop: 8 }}>
+          Login screen
+        </AppText>
+        <AppText muted variant="caption">
+          Adds PIN and fingerprint sign-in on the login page (separate from app lock).
+        </AppText>
+        <Input
+          label="Your account password"
+          onChangeText={setBiometricPassword}
+          placeholder="Enter once to enable login with PIN or fingerprint"
+          secureTextEntry
+          secureToggle
+          value={biometricPassword}
+        />
+        <Button
+          title={
+            biometricLoginEnabled
+              ? 'Login with PIN & fingerprint is ON'
+              : 'Enable login with PIN & fingerprint'
+          }
+          variant={biometricLoginEnabled ? 'secondary' : 'primary'}
+          onPress={() => {
+            void (async () => {
+              if (biometricLoginEnabled) {
+                await disableQuickLogin();
+                setBiometricLoginEnabled(false);
+                setBiometricPassword('');
+                notify.success('Login with PIN & fingerprint disabled');
+                return;
+              }
+              if (!user?.email) {
+                notify.error('Sign in with an email account first');
+                return;
+              }
+              if (!(await hasPin())) {
+                notify.error('Save an app PIN above first');
+                return;
+              }
+              if (!biometricPassword.trim()) {
+                notify.error('Enter your account password above');
+                return;
+              }
+              try {
+                await enableQuickLogin(user.email, biometricPassword);
+                setBiometricLoginEnabled(true);
+                setBiometricPassword('');
+                notify.success('Login with PIN & fingerprint enabled');
+              } catch (error) {
+                notify.error(error instanceof Error ? error.message : 'Could not enable login');
+              }
+            })();
+          }}
+        />
+        {biometricLoginEnabled ? (
+          <AppText color={colors.primary} variant="caption">
+            ✓ Quick sign-in is active on the login screen
+          </AppText>
+        ) : null}
         <Input
           label="Current password"
           onChangeText={setCurrentPassword}
@@ -808,6 +1094,16 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     flexGrow: 1,
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  sexRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   logRow: {
     flexDirection: 'row',
     alignItems: 'center',

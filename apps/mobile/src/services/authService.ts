@@ -7,6 +7,7 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getWebAppLink } from '@/lib/webApp';
 import { seedUserData } from '@/services/seedService';
 import { syncNow } from '@/services/syncService';
+import { readBiometricCredentials } from '@/services/biometricCredentialStore';
 import { useAuthStore, type AuthUser } from '@/stores/authStore';
 import { useNetworkStore } from '@/stores/networkStore';
 
@@ -377,5 +378,82 @@ export async function syncPendingAuth(): Promise<void> {
     } catch {
       await authRepository.markFailed(cred.user_id);
     }
+  }
+}
+
+/** Restore a Supabase session when back online so queued sync can run. */
+export async function tryRestoreCloudSession(): Promise<boolean> {
+  if (!isSupabaseConfigured || !useNetworkStore.getState().isConnected) return false;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    if (useAuthStore.getState().authMode !== 'cloud') {
+      useAuthStore.getState().setCloudSession(session);
+    }
+    return true;
+  }
+
+  const user = useAuthStore.getState().user;
+  if (!user?.email) return false;
+
+  const quickCreds = await readBiometricCredentials();
+  if (quickCreds?.password) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: quickCreds.email,
+        password: quickCreds.password,
+      });
+      if (!error && data.session?.user) {
+        const oldId = user.id;
+        const cloudId = data.session.user.id;
+        if (oldId !== cloudId) {
+          await authRepository.remapUserId(oldId, cloudId);
+        }
+        await authRepository.markSynced(cloudId, cloudId);
+        await cacheCredentialsForOfflineLogin({
+          userId: cloudId,
+          email: data.session.user.email ?? quickCreds.email,
+          password: quickCreds.password,
+          displayName: (data.session.user.user_metadata?.display_name as string | undefined) ?? null,
+        });
+        useAuthStore.getState().setCloudSession(data.session);
+        return true;
+      }
+    } catch {
+      // fall through to local credential sign-in
+    }
+  }
+
+  const cred = await authRepository.findByUserId(user.id);
+  if (!cred) return false;
+  const password = await readPendingPassword(cred.user_id);
+  if (!password) return false;
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cred.email,
+      password,
+    });
+    if (error || !data.session?.user) return false;
+
+    const oldId = user.id;
+    const cloudId = data.session.user.id;
+    if (oldId !== cloudId) {
+      await authRepository.remapUserId(oldId, cloudId);
+    }
+    await authRepository.markSynced(cloudId, cloudId);
+    await clearPendingPassword(oldId);
+    await clearPendingPassword(cloudId);
+
+    useAuthStore.getState().setCloudSession(data.session);
+    await cacheCredentialsForOfflineLogin({
+      userId: cloudId,
+      email: cred.email,
+      password,
+      displayName: cred.display_name,
+    });
+    return true;
+  } catch {
+    return false;
   }
 }

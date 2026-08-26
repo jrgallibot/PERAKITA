@@ -4,10 +4,12 @@ import {
 } from '@perakita/shared';
 import { accountRepository } from '@/database/repositories/accountRepository';
 import { categoryRepository } from '@/database/repositories/categoryRepository';
+import { achievementRepository } from '@/database/repositories/achievementRepository';
 import { upsertProfile } from '@/services/settingsService';
 
 export async function seedUserData(userId: string, email?: string | null): Promise<void> {
   await upsertProfile(userId, null, email);
+  await achievementRepository.seedDefaults();
 
   const categoryCount = await categoryRepository.count(userId);
   if (categoryCount === 0) {

@@ -1,8 +1,8 @@
 import { WEB_APP_URL, normalizeWebAppUrl, webAppPath } from '@perakita/shared';
+import { EXPO_PUBLIC_WEB_APP_URL } from '@/lib/env';
 
 export function getWebAppUrl(): string {
-  const fromEnv = process.env.EXPO_PUBLIC_WEB_APP_URL?.trim();
-  return normalizeWebAppUrl(fromEnv || WEB_APP_URL);
+  return normalizeWebAppUrl(EXPO_PUBLIC_WEB_APP_URL || WEB_APP_URL);
 }
 
 export function getWebAppLink(path = '/'): string {

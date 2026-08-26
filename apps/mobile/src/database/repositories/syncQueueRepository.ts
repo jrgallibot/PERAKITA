@@ -44,6 +44,14 @@ export async function enqueueSync(
   await refreshPendingCount();
 }
 
+export async function requeueFailedItems(): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE sync_queue SET status = 'pending', retry_count = 0, error_message = NULL WHERE status = 'failed'`,
+  );
+  await refreshPendingCount();
+}
+
 export async function getPendingItems(limit = 100): Promise<SyncQueueItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SyncQueueItem>(

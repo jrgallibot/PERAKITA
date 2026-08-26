@@ -1,21 +1,25 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPasswordSchema, mapAuthError, type ForgotPasswordInput } from '@perakita/shared';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getWebAppLink } from '@/lib/webApp';
-import { Screen, Input, Button, AppText } from '@/components/ui';
+import { Input, Button, AppText } from '@/components/ui';
+import { AuthShell } from '@/components/auth/AuthShell';
 import { notify } from '@/stores/toastStore';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useNetworkStore } from '@/stores/networkStore';
 
 export default function ForgotPasswordScreen() {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
+  const isConnected = useNetworkStore((s) => s.isConnected);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const isTablet = width >= 768;
+
+  const canResetOnline = isConnected && isSupabaseConfigured;
 
   const {
     control,
@@ -27,8 +31,8 @@ export default function ForgotPasswordScreen() {
   });
 
   const onSubmit = async (data: ForgotPasswordInput) => {
-    if (!isSupabaseConfigured) {
-      notify.error('Supabase environment variables are not set.');
+    if (!canResetOnline) {
+      notify.error('Connect to the internet to reset your password.');
       return;
     }
     setLoading(true);
@@ -45,54 +49,90 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <Screen>
-      <View style={[styles.container, isTablet && styles.tabletContainer]}>
-        <View style={styles.header}>
-          <AppText variant="title">Reset password</AppText>
-          <AppText muted>
-            {sent
-              ? 'If an account exists, we sent reset instructions to your email.'
-              : 'Enter your email and we will send reset instructions.'}
-          </AppText>
-        </View>
-
-        {!sent && (
-          <>
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  error={errors.email?.message}
-                  keyboardType="email-address"
-                  label="Email"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  placeholder="you@example.com"
-                  value={value}
-                />
-              )}
-            />
-            <Button loading={loading} onPress={handleSubmit(onSubmit)} title="Send Reset Link" />
-          </>
-        )}
-
+    <AuthShell
+      footer={
         <Link href="/(auth)/login" asChild>
-          <Pressable style={styles.back}>
-            <Text style={[styles.link, { color: colors.primary }]}>Back to Sign In</Text>
+          <Pressable hitSlop={12}>
+            <AppText color={colors.primary} variant="link">
+              Back to Sign In
+            </AppText>
           </Pressable>
         </Link>
-      </View>
-    </Screen>
+      }
+      showBrand={false}
+      subtitle={
+        sent
+          ? 'If an account exists, we sent reset instructions to your email.'
+          : 'Enter your email and we will send reset instructions when you are online.'
+      }
+      title="Reset password"
+    >
+      {!canResetOnline ? (
+        <View style={[styles.offlineNotice, { backgroundColor: `${colors.expense}18`, borderColor: colors.expense }]}>
+          <Ionicons color={colors.expense} name="cloud-offline-outline" size={22} />
+          <AppText color={colors.expense} style={styles.offlineText} variant="caption">
+            Password reset requires an internet connection. Sign in offline with your saved account, or reconnect and try again.
+          </AppText>
+        </View>
+      ) : null}
+
+      {sent ? (
+        <View style={[styles.successNotice, { backgroundColor: colors.primaryMuted, borderColor: colors.primary }]}>
+          <Ionicons color={colors.primary} name="checkmark-circle-outline" size={24} />
+          <AppText color={colors.primary} style={styles.successText} variant="caption">
+            Check your inbox and spam folder. The link opens in your browser to set a new password.
+          </AppText>
+        </View>
+      ) : (
+        <>
+          <Controller
+            control={control}
+            name="email"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                autoCapitalize="none"
+                autoComplete="email"
+                editable={canResetOnline}
+                error={errors.email?.message}
+                keyboardType="email-address"
+                label="Email"
+                onBlur={onBlur}
+                onChangeText={onChange}
+                placeholder="you@example.com"
+                value={value}
+              />
+            )}
+          />
+          <Button
+            disabled={!canResetOnline}
+            loading={loading}
+            onPress={handleSubmit(onSubmit)}
+            title="Send Reset Link"
+          />
+        </>
+      )}
+    </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { paddingTop: 72 },
-  tabletContainer: { maxWidth: 440, alignSelf: 'center', width: '100%' },
-  header: { marginBottom: 24 },
-  back: { marginTop: 24, alignItems: 'center' },
-  link: { fontSize: 16, fontWeight: '600' },
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  offlineText: { flex: 1, fontWeight: '600', lineHeight: 18 },
+  successNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  successText: { flex: 1, fontWeight: '600', lineHeight: 18 },
 });

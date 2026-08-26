@@ -1,9 +1,14 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { createClient } from '@supabase/supabase-js';
+import {
+  EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_SUPABASE_URL,
+  isSupabaseEnvConfigured,
+} from '@/lib/env';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const supabaseUrl = EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 const CHUNK_SIZE = 1800;
 
@@ -54,7 +59,7 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = isSupabaseEnvConfigured;
 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',

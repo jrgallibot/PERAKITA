@@ -28,6 +28,13 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
     report_email_enabled: Boolean(data.report_email_enabled),
     report_email_period: ((data.report_email_period as string) ?? 'monthly') as Profile['report_email_period'],
     report_email_last_sent_at: (data.report_email_last_sent_at as string | null) ?? null,
+    notify_enabled: Boolean(data.notify_enabled),
+    notify_bills: data.notify_bills == null ? true : Boolean(data.notify_bills),
+    notify_loans: data.notify_loans == null ? true : Boolean(data.notify_loans),
+    notify_budget: data.notify_budget == null ? true : Boolean(data.notify_budget),
+    notify_safe_to_spend:
+      data.notify_safe_to_spend == null ? true : Boolean(data.notify_safe_to_spend),
+    notify_goals: data.notify_goals == null ? true : Boolean(data.notify_goals),
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
   };
@@ -123,3 +130,5 @@ export async function sendPasswordResetEmail(email: string, redirectTo: string) 
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw error;
 }
+
+export { profileToNotificationPrefs } from '@/lib/notificationPrefs';

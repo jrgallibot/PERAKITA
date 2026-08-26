@@ -45,28 +45,34 @@ export function useAuthListener() {
     let mounted = true;
 
     async function init() {
-      await initializeDatabase();
-      await loadThemePreference();
+      try {
+        await initializeDatabase();
+        await loadThemePreference();
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (session?.user) {
-        setCloudSession(session);
-        await hydrateUserData(session.user.id, session.user.email);
-      } else {
-        const restored = await restoreLocalSessionIfNeeded();
-        if (restored) {
-          const user = useAuthStore.getState().user;
-          if (user) await hydrateUserData(user.id, user.email);
+        if (session?.user) {
+          setCloudSession(session);
+          await hydrateUserData(session.user.id, session.user.email);
         } else {
-          setCloudSession(null);
+          const restored = await restoreLocalSessionIfNeeded();
+          if (restored) {
+            const user = useAuthStore.getState().user;
+            if (user) await hydrateUserData(user.id, user.email);
+          } else {
+            setCloudSession(null);
+          }
         }
+      } catch (error) {
+        console.error('[auth] startup failed', error);
+        setCloudSession(null);
+      } finally {
+        if (mounted) setInitialized(true);
       }
-      if (mounted) setInitialized(true);
     }
 
     void init();

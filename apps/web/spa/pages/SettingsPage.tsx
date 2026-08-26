@@ -18,15 +18,19 @@ import {
   type ProfileInput,
   type ReportPeriod,
   type ThemeMode,
+  type NotificationPrefs,
+  DEFAULT_NOTIFICATION_PREFS,
 } from '@perakita/shared';
 import { AppHeader } from '@/components/AppHeader';
 import { useToast } from '@/components/Toast';
 import { useWebTheme } from '@/components/ThemeProvider';
 import { useAuth } from '@/spa/AuthProvider';
 import { clearWebFinanceData, resetWebCurrentBalance } from '@/lib/finance';
+import { updateNotificationPrefs as saveNotificationPrefs } from '@/lib/notificationPrefs';
 import {
   changePassword,
   ensureProfile,
+  profileToNotificationPrefs,
   updateProfile,
   updateReportEmailPrefs,
   uploadAvatar,
@@ -63,6 +67,8 @@ export function SettingsPage() {
   const [reportEmailPeriod, setReportEmailPeriod] = useState<ReportPeriod>('monthly');
   const [savingReportPrefs, setSavingReportPrefs] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [notifyPrefs, setNotifyPrefs] = useState<NotificationPrefs>({ ...DEFAULT_NOTIFICATION_PREFS });
+  const [savingNotifyPrefs, setSavingNotifyPrefs] = useState(false);
 
   const profileForm = useForm<ProfileInput>({
     resolver: zodResolver(profileSchema),
@@ -105,6 +111,7 @@ export function SettingsPage() {
         setAvatarUrl(profile.avatar_url);
         setReportEmailEnabled(profile.report_email_enabled);
         setReportEmailPeriod(profile.report_email_period);
+        setNotifyPrefs(profileToNotificationPrefs(profile));
       } catch (err) {
         if (!cancelled) {
           notify.error(err instanceof Error ? err.message : 'Could not load profile');
@@ -354,6 +361,66 @@ export function SettingsPage() {
               </button>
             </form>
           )}
+        </section>
+
+        <section className="mt-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            App notifications
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Show reminders on your dashboard for bills, loans, budgets, and safe-to-spend. Mobile also
+            schedules push notifications when enabled.
+          </p>
+          <label className="mt-4 flex items-center gap-3 text-sm font-semibold">
+            <input
+              checked={notifyPrefs.enabled}
+              onChange={(event) => setNotifyPrefs((p) => ({ ...p, enabled: event.target.checked }))}
+              type="checkbox"
+            />
+            Enable app notifications
+          </label>
+          <div className="mt-3 space-y-2">
+            {(
+              [
+                { key: 'bills' as const, label: 'Recurring bills (due within 7 days)' },
+                { key: 'loans' as const, label: 'Loan due dates' },
+                { key: 'budget' as const, label: 'Budget warnings (85%+ used)' },
+                { key: 'safeToSpend' as const, label: 'Daily safe-to-spend summary' },
+              ] as const
+            ).map((item) => (
+              <label
+                key={item.key}
+                className={`flex items-center gap-3 text-sm ${notifyPrefs.enabled ? '' : 'opacity-50'}`}
+              >
+                <input
+                  checked={notifyPrefs[item.key]}
+                  disabled={!notifyPrefs.enabled}
+                  onChange={(event) =>
+                    setNotifyPrefs((p) => ({ ...p, [item.key]: event.target.checked }))
+                  }
+                  type="checkbox"
+                />
+                {item.label}
+              </label>
+            ))}
+          </div>
+          <button
+            className="mt-4 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold"
+            disabled={savingNotifyPrefs || profileLoading}
+            onClick={() => {
+              if (!user?.id) return;
+              setSavingNotifyPrefs(true);
+              void saveNotificationPrefs(user.id, notifyPrefs)
+                .then(() => notify.success('Notification preferences saved'))
+                .catch((err: unknown) =>
+                  notify.error(err instanceof Error ? err.message : 'Could not save preferences')
+                )
+                .finally(() => setSavingNotifyPrefs(false));
+            }}
+            type="button"
+          >
+            {savingNotifyPrefs ? 'Saving…' : 'Save notification prefs'}
+          </button>
         </section>
 
         <section className="mt-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">

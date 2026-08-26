@@ -31,6 +31,7 @@ function mapTransaction(row: Record<string, unknown>): Transaction {
     notes: (row.notes as string) ?? null,
     transaction_date: row.transaction_date as string,
     transfer_to_account_id: (row.transfer_to_account_id as string) ?? null,
+    payment_method: (row.payment_method as string) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     deleted_at: (row.deleted_at as string) ?? null,
@@ -128,6 +129,7 @@ export const transactionRepository = {
       notes?: string | null;
       transaction_date: string;
       transfer_to_account_id?: string | null;
+      payment_method?: string | null;
     }
   ): Promise<Transaction> {
     const db = await getDatabase();
@@ -140,9 +142,9 @@ export const transactionRepository = {
     await db.runAsync(
       `INSERT INTO transactions (
         id, user_id, account_id, category_id, budget_id, type, amount, description, notes,
-        transaction_date, transfer_to_account_id,
+        transaction_date, transfer_to_account_id, payment_method,
         created_at, updated_at, deleted_at, sync_status, last_synced_at, device_id, version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         userId,
@@ -155,6 +157,7 @@ export const transactionRepository = {
         data.notes ?? null,
         data.transaction_date,
         data.transfer_to_account_id ?? null,
+        data.payment_method ?? null,
         now,
         now,
         sync.deleted_at,
@@ -177,6 +180,7 @@ export const transactionRepository = {
       notes: data.notes ?? null,
       transaction_date: data.transaction_date,
       transfer_to_account_id: data.transfer_to_account_id ?? null,
+      payment_method: data.payment_method ?? null,
       created_at: now,
       updated_at: now,
       ...sync,

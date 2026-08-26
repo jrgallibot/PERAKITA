@@ -94,6 +94,7 @@ export const transactionSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   transaction_date: z.string(),
+  payment_method: z.string().max(50).nullable().optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -104,6 +105,107 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type ProfileInput = z.infer<typeof profileSchema>;
 export type AccountInput = z.infer<typeof accountSchema>;
 export type TransactionInput = z.infer<typeof transactionSchema>;
+
+export const incomeFrequencySchema = z.enum([
+  'daily',
+  'weekly',
+  'biweekly',
+  'monthly',
+  'custom',
+]);
+
+export const recurringFrequencySchema = z.enum(['daily', 'weekly', 'monthly', 'custom']);
+
+export const onboardingSchema = z.object({
+  display_name: z.string().trim().min(1, 'Name is required').max(100),
+  currency: z.string().default('PHP'),
+  current_money: z.number().min(0, 'Amount cannot be negative'),
+  income_source: z.string().trim().min(1, 'Income source is required').max(100),
+  income_amount: z.number().positive('Income amount must be greater than zero'),
+  income_frequency: incomeFrequencySchema,
+  next_payday: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
+});
+
+export const recurringExpenseSchema = z.object({
+  name: z.string().min(1).max(100),
+  amount: z.number().positive(),
+  category_id: z.string().uuid().nullable().optional(),
+  frequency: recurringFrequencySchema,
+  custom_interval_days: z.number().int().positive().nullable().optional(),
+  next_due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  payment_method: z.string().max(50).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const savingsGoalCategorySchema = z.enum([
+  'emergency_fund',
+  'phone',
+  'laptop',
+  'vacation',
+  'tuition',
+  'wedding',
+  'house',
+  'motorcycle',
+  'car',
+  'business',
+  'other',
+]);
+
+export const savingsGoalSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Goal name is required').max(100),
+    category: savingsGoalCategorySchema,
+    icon: z.string().min(1).max(80).default('flag-outline'),
+    target_amount: z.number().positive('Target amount must be greater than zero'),
+    current_amount: z.number().min(0, 'Current amount cannot be negative').default(0),
+    target_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+      .nullable()
+      .optional(),
+    priority: z.enum(['low', 'medium', 'high']).default('medium'),
+    description: z.string().max(500).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.current_amount > data.target_amount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Current amount cannot exceed target amount',
+        path: ['current_amount'],
+      });
+    }
+    if (data.target_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(`${data.target_date}T00:00:00`);
+      if (Number.isNaN(target.getTime()) || target <= today) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Target date must be in the future',
+          path: ['target_date'],
+        });
+      }
+    }
+  });
+
+export const savingsContributionSchema = z.object({
+  goal_id: z.string().uuid(),
+  amount: z.number().positive('Amount must be greater than zero'),
+  contribution_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
+  source: z.string().max(100).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const emergencyFundSchema = z.object({
+  target_amount: z.number().min(0),
+  current_amount: z.number().min(0).default(0),
+});
+
+export type OnboardingInput = z.infer<typeof onboardingSchema>;
+export type RecurringExpenseInput = z.infer<typeof recurringExpenseSchema>;
+export type SavingsGoalInput = z.infer<typeof savingsGoalSchema>;
+export type SavingsContributionInput = z.infer<typeof savingsContributionSchema>;
+export type EmergencyFundInput = z.infer<typeof emergencyFundSchema>;
 
 /** Age in whole years from birthday ISO date, or null if invalid. */
 export function ageFromBirthday(birthday: string | null | undefined): number | null {

@@ -1,13 +1,15 @@
 # PeraKita
 
-Offline-first personal finance & debt tracker for mobile, with a Next.js web dashboard.
+Offline-first personal finance assistant for mobile, with a Next.js web dashboard.
+
+**Tagline:** Know where your money goes before it runs out.
 
 ## Stack
 
-- **Mobile:** Expo SDK 54 (Expo Go / Play Store compatible), Expo Router, SQLite, Supabase Auth
+- **Mobile:** Expo SDK 54, Expo Router, SQLite (offline-first), Supabase sync
 - **Web:** Next.js static SPA (React Router), Tailwind CSS, Supabase Auth
-- **Shared:** TypeScript types, Zod validation, theme tokens, calculations
-- **Cloud:** Supabase (PostgreSQL + RLS)
+- **Shared:** PESO engine (safe-to-spend, forecast, health score), Zod validation, theme tokens
+- **Cloud:** Supabase (PostgreSQL + RLS + Edge Functions for reports)
 
 ## Prerequisites
 
@@ -37,6 +39,15 @@ Keep one `.env` at the **repo root**. Next.js and Expo load it from there — th
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Web |
 
 Never commit the service role key to the mobile app.
+
+### PESO engine & AI
+
+- **Safe-to-spend**, forecast, health score, and spending-risk logic live in `packages/shared/src/peso/`.
+- Mobile aggregates data offline via `apps/mobile/src/services/pesoEngineService.ts`.
+- Web reads Supabase via `apps/web/lib/peso.ts`.
+- AI insights and chat use **PeraKita Local AI** in `packages/shared/src/peso/localAi.ts` — rule-based answers from your PESO snapshot (no Gemini or third-party LLM). Runs on-device in mobile/web; optional Edge Functions `peso-ai-insight` / `peso-ai-chat` expose the same logic over HTTP.
+- **Demo data:** Mobile Settings → **Load demo data** (₱25k hackathon scenario).
+- **Notifications:** Settings → **App notifications** (web dashboard banners + mobile push). Master ON/OFF plus toggles for bills, loans, budget warnings, and daily safe-to-spend. Defaults to OFF until you enable and save.
 
 ### Supabase
 

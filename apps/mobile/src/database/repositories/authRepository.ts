@@ -171,6 +171,13 @@ export const authRepository = {
       'loan_payments',
       'budgets',
       'budget_categories',
+      'financial_profiles',
+      'recurring_expenses',
+      'savings_goals',
+      'savings_contributions',
+      'goal_milestones',
+      'emergency_fund_targets',
+      'user_achievements',
       'app_settings',
       'local_credentials',
     ] as const;
