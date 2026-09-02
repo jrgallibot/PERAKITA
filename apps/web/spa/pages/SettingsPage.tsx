@@ -593,6 +593,27 @@ export function SettingsPage() {
           </div>
         </section>
 
+        <section className="mt-4 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Finances</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Link GCash, Maya, or bank wallets and refresh balances manually from those apps.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-semibold"
+              to="/manage#linked-wallets"
+            >
+              Linked wallets & banks
+            </Link>
+            <Link
+              className="rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm font-semibold"
+              to="/manage"
+            >
+              Manage finances
+            </Link>
+          </div>
+        </section>
+
         <section className="mt-4 rounded-[24px] border border-red-500/30 bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
           <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">
             Your data

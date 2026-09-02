@@ -48,6 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundler: 'metro',
   },
   plugins: [
+    './plugins/withMonorepoAndroidRoot',
     'expo-router',
     'expo-secure-store',
     'expo-sqlite',

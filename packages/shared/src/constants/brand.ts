@@ -67,6 +67,10 @@ export const APP_FAQ = [
     a: 'Your ledger starts on your device. Cloud sync uses your authenticated account so only you can access your synced finance data.',
   },
   {
+    q: 'Can I link GCash, Maya, or my bank account?',
+    a: 'You can track GCash, Maya, and bank balances in Linked wallets & banks. PeraKita does not connect directly to those apps — open your real wallet or bank app, check your balance, then enter it in PeraKita to refresh. Income and expenses logged with that payment mode keep the wallet balance updated between refreshes.',
+  },
+  {
     q: 'How do I install the Android app?',
     a: 'On the homepage, tap Download APK. Open the file when it finishes. Android may ask you to allow installs from your browser — turn that on, then install. Sign in with the same email you use on the web.',
   },

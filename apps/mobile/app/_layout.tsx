@@ -31,6 +31,7 @@ function RootNav() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="linked-accounts" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="activity-log" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />

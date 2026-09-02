@@ -20,6 +20,8 @@ export type AccountType =
   | 'emergency'
   | 'other';
 
+export type AccountProvider = 'cash' | 'gcash' | 'maya' | 'bank' | 'other';
+
 export type LoanType = 'debt' | 'receivable';
 
 export type LoanStatus = 'active' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
@@ -70,6 +72,11 @@ export interface Account extends SyncMetadata {
   current_balance: number;
   currency: string;
   is_active: boolean;
+  provider: AccountProvider | null;
+  masked_identifier: string | null;
+  is_linked: boolean;
+  linked_at: string | null;
+  last_balance_sync_at: string | null;
   created_at: string;
   updated_at: string;
 }

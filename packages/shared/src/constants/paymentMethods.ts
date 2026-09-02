@@ -5,10 +5,10 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const DEFAULT_PAYMENT_METHOD: PaymentMethod = 'Cash';
 
 export const DEFAULT_ACCOUNTS = [
-  { name: 'Cash', type: 'cash' as const },
-  { name: 'GCash', type: 'ewallet' as const },
-  { name: 'Maya', type: 'ewallet' as const },
-  { name: 'Bank', type: 'bank' as const },
+  { name: 'Cash', type: 'cash' as const, provider: 'cash' as const },
+  { name: 'GCash', type: 'ewallet' as const, provider: 'gcash' as const },
+  { name: 'Maya', type: 'ewallet' as const, provider: 'maya' as const },
+  { name: 'Bank', type: 'bank' as const, provider: 'bank' as const },
 ];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {

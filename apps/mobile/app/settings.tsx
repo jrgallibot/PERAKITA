@@ -698,6 +698,21 @@ export default function SettingsScreen() {
 
       <Card style={styles.section}>
         <AppText muted variant="caption">
+          LINKED WALLETS
+        </AppText>
+        <AppText muted>
+          Track GCash, Maya, and bank balances by entering what you see in those apps. PeraKita does not connect
+          directly to e-wallets or banks.
+        </AppText>
+        <Button
+          onPress={() => router.push('/linked-accounts' as never)}
+          title="Linked wallets & banks"
+          variant="secondary"
+        />
+      </Card>
+
+      <Card style={styles.section}>
+        <AppText muted variant="caption">
           PESO DEMO
         </AppText>
         <AppText muted variant="caption" style={{ marginBottom: 8 }}>

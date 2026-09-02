@@ -13,6 +13,9 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
+config.resolver.extraNodeModules = {
+  '@perakita/shared': path.resolve(workspaceRoot, 'packages/shared'),
+};
 config.resolver.disableHierarchicalLookup = false;
 config.resolver.unstable_enableSymlinks = true;
 

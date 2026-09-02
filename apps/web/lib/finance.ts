@@ -4,15 +4,21 @@ import {
   DEFAULT_ACCOUNTS,
   DEFAULT_PAYMENT_METHOD,
   PAYMENT_METHODS,
+  ACCOUNT_PROVIDER_LABELS,
   buildBudgetStats,
   buildPeriodTrend,
   buildSpendingBreakdown,
   calculateLoanInterest,
   evaluateKinsenaPayment,
   formatCurrency,
+  formatLastBalanceSync,
   getDueTodayLoanAlerts,
   getReportPeriodRange,
+  isLinkableProvider,
+  providerFromAccountName,
+  reconcileAccountBalance,
   sortPaymentAccounts,
+  type AccountProvider,
   type BudgetStat,
   type DailyTrendPoint,
   type ReportPeriod,
@@ -24,6 +30,11 @@ export type WebAccount = {
   id: string;
   name: string;
   current_balance: number;
+  provider: AccountProvider | null;
+  masked_identifier: string | null;
+  is_linked: boolean;
+  linked_at: string | null;
+  last_balance_sync_at: string | null;
 };
 
 export type WebCategory = {
@@ -170,6 +181,11 @@ export async function ensureFinanceDefaults(userId: string): Promise<void> {
       current_balance: 0,
       currency: 'PHP',
       is_active: true,
+      provider: preset.provider,
+      masked_identifier: null,
+      is_linked: false,
+      linked_at: null,
+      last_balance_sync_at: null,
       created_at: now,
       updated_at: now,
       deleted_at: null,
@@ -234,7 +250,13 @@ export async function loadDashboard(userId: string) {
 
   const [accountsRes, categoriesRes, txRes, loansRes, budgetsRes, monthTxRes, paymentsRes, balanceRes] =
     await Promise.all([
-    supabase.from('accounts').select('id, name, current_balance').eq('user_id', userId).is('deleted_at', null),
+    supabase
+      .from('accounts')
+      .select(
+        'id, name, current_balance, provider, masked_identifier, is_linked, linked_at, last_balance_sync_at'
+      )
+      .eq('user_id', userId)
+      .is('deleted_at', null),
     supabase.from('categories').select('id, name, type').eq('user_id', userId).is('deleted_at', null).order('name'),
     supabase
       .from('transactions')
@@ -292,6 +314,11 @@ export async function loadDashboard(userId: string) {
       id: row.id as string,
       name: row.name as string,
       current_balance: num(row.current_balance),
+      provider: (row.provider as AccountProvider | null) ?? providerFromAccountName(String(row.name)),
+      masked_identifier: (row.masked_identifier as string) ?? null,
+      is_linked: Boolean(row.is_linked),
+      linked_at: (row.linked_at as string) ?? null,
+      last_balance_sync_at: (row.last_balance_sync_at as string) ?? null,
     }))
   );
   const categories: WebCategory[] = (categoriesRes.data ?? []).map((row) => ({
@@ -715,6 +742,11 @@ export async function createWebPaymentMode(input: { userId: string; name: string
     current_balance: 0,
     currency: 'PHP',
     is_active: true,
+    provider: providerFromAccountName(name),
+    masked_identifier: null,
+    is_linked: false,
+    linked_at: null,
+    last_balance_sync_at: null,
     created_at: now,
     updated_at: now,
     deleted_at: null,
@@ -725,6 +757,156 @@ export async function createWebPaymentMode(input: { userId: string; name: string
   if (error) throw error;
   return id;
 }
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function createWebBalanceAdjustment(input: {
+  userId: string;
+  accountId: string;
+  accountName: string;
+  providerLabel: string;
+  delta: number;
+  note: string;
+}): Promise<void> {
+  if (input.delta === 0) return;
+  const now = new Date().toISOString();
+  const { error: txError } = await supabase.from('transactions').insert({
+    id: crypto.randomUUID(),
+    user_id: input.userId,
+    account_id: input.accountId,
+    category_id: null,
+    budget_id: null,
+    type: 'adjustment',
+    amount: Math.abs(input.delta),
+    description: `Balance sync from ${input.providerLabel}`,
+    notes: input.note,
+    transaction_date: todayIsoDate(),
+    payment_method: input.accountName,
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+    sync_status: 'synced',
+    version: 1,
+  });
+  if (txError) throw txError;
+  await adjustAccount(input.accountId, input.delta);
+}
+
+export function listLinkableWebAccounts(accounts: WebAccount[]): WebAccount[] {
+  return accounts.filter(
+    (account) => account.provider && isLinkableProvider(account.provider) && account.provider !== 'cash'
+  );
+}
+
+export async function linkWebAccount(input: {
+  userId: string;
+  accountId: string;
+  reportedBalance: number;
+  maskedIdentifier?: string | null;
+}): Promise<void> {
+  const { data: account, error } = await supabase
+    .from('accounts')
+    .select('id, name, current_balance, provider, user_id')
+    .eq('id', input.accountId)
+    .eq('user_id', input.userId)
+    .is('deleted_at', null)
+    .single();
+  if (error || !account) throw new Error('Account not found.');
+  const provider = (account.provider as AccountProvider | null) ?? providerFromAccountName(String(account.name));
+  if (!isLinkableProvider(provider) || provider === 'cash') {
+    throw new Error('This account cannot be linked as an external wallet.');
+  }
+  if (!Number.isFinite(input.reportedBalance) || input.reportedBalance < 0) {
+    throw new Error('Enter a valid balance from your wallet or bank app.');
+  }
+
+  const now = new Date().toISOString();
+  const delta = reconcileAccountBalance(num(account.current_balance), input.reportedBalance);
+  await createWebBalanceAdjustment({
+    userId: input.userId,
+    accountId: input.accountId,
+    accountName: String(account.name),
+    providerLabel: ACCOUNT_PROVIDER_LABELS[provider],
+    delta,
+    note: delta > 0 ? 'Linked wallet balance increase' : 'Linked wallet balance decrease',
+  });
+
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({
+      is_linked: true,
+      masked_identifier: input.maskedIdentifier?.trim() || null,
+      linked_at: now,
+      last_balance_sync_at: now,
+      provider,
+      updated_at: now,
+      sync_status: 'updated',
+    })
+    .eq('id', input.accountId);
+  if (updateError) throw updateError;
+}
+
+export async function refreshWebLinkedBalance(input: {
+  userId: string;
+  accountId: string;
+  reportedBalance: number;
+}): Promise<void> {
+  const { data: account, error } = await supabase
+    .from('accounts')
+    .select('id, name, current_balance, provider, is_linked, user_id')
+    .eq('id', input.accountId)
+    .eq('user_id', input.userId)
+    .is('deleted_at', null)
+    .single();
+  if (error || !account) throw new Error('Account not found.');
+  if (!account.is_linked) throw new Error('Link this wallet first.');
+  if (!Number.isFinite(input.reportedBalance) || input.reportedBalance < 0) {
+    throw new Error('Enter a valid balance from your wallet or bank app.');
+  }
+
+  const provider = (account.provider as AccountProvider | null) ?? providerFromAccountName(String(account.name));
+  const now = new Date().toISOString();
+  const delta = reconcileAccountBalance(num(account.current_balance), input.reportedBalance);
+  await createWebBalanceAdjustment({
+    userId: input.userId,
+    accountId: input.accountId,
+    accountName: String(account.name),
+    providerLabel: provider ? ACCOUNT_PROVIDER_LABELS[provider] : String(account.name),
+    delta,
+    note: delta > 0 ? 'Manual wallet refresh (increase)' : 'Manual wallet refresh (decrease)',
+  });
+
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({
+      last_balance_sync_at: now,
+      updated_at: now,
+      sync_status: 'updated',
+    })
+    .eq('id', input.accountId);
+  if (updateError) throw updateError;
+}
+
+export async function unlinkWebAccount(userId: string, accountId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('accounts')
+    .update({
+      is_linked: false,
+      masked_identifier: null,
+      linked_at: null,
+      last_balance_sync_at: null,
+      updated_at: now,
+      sync_status: 'updated',
+    })
+    .eq('id', accountId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+export { formatLastBalanceSync };
 
 export async function createWebLoan(input: {
   userId: string;

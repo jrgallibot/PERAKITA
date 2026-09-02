@@ -1,9 +1,18 @@
 # Build a release APK (requires Android SDK + JDK).
 # Loads repo root .env so EXPO_PUBLIC_* vars are embedded in the native build.
-$ErrorActionPreference = "Stop"
+param(
+  [switch]$Clean
+)
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
-$envFile = Join-Path $repoRoot ".env"
+$ErrorActionPreference = 'Stop'
+
+$mobileDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$repoRoot = (Resolve-Path (Join-Path $mobileDir '..\..')).Path
+$envFile = Join-Path $repoRoot '.env'
+
+if ($env:OS -match 'Windows' -and $repoRoot.Length -gt 50) {
+  Write-Host 'Note: This repo path is long for Windows native builds. Enable long paths or run pnpm build:apk:eas if Gradle fails.' -ForegroundColor Yellow
+}
 
 if (Test-Path $envFile) {
   Get-Content $envFile | ForEach-Object {
@@ -19,65 +28,120 @@ if (Test-Path $envFile) {
     ) {
       $value = $value.Substring(1, $value.Length - 2)
     }
-    if (-not [string]::IsNullOrWhiteSpace($key) -and -not (Test-Path "Env:$key")) {
+    if (-not [string]::IsNullOrWhiteSpace($key)) {
       Set-Item -Path "Env:$key" -Value $value
     }
   }
   Write-Host "Loaded environment from $envFile" -ForegroundColor Cyan
 } else {
-  Write-Host "No .env at repo root — EXPO_PUBLIC_* may be missing in the APK." -ForegroundColor Yellow
+  Write-Host 'No .env at repo root; EXPO_PUBLIC_* may be missing in the APK.' -ForegroundColor Yellow
 }
 
-$javaHome = "C:\Program Files\Android\Android Studio\jbr"
-$androidHome = "$env:LOCALAPPDATA\Android\Sdk"
-
-if (-not (Test-Path "$javaHome\bin\java.exe")) {
-  Write-Error "JDK not found at $javaHome. Install Android Studio or set JAVA_HOME manually."
+$studioJbr = Join-Path ${env:ProgramFiles} 'Android\Android Studio\jbr'
+$javaBin = Join-Path $studioJbr 'bin\java.exe'
+$javaHome = if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
+  $env:JAVA_HOME
+} elseif (Test-Path $javaBin) {
+  $studioJbr
+} else {
+  $null
 }
 
-if (-not (Test-Path $androidHome)) {
-  Write-Error "Android SDK not found at $androidHome. Open Android Studio -> SDK Manager and install the SDK."
+$defaultSdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$androidHome = if ($env:ANDROID_HOME -and (Test-Path $env:ANDROID_HOME)) {
+  $env:ANDROID_HOME
+} elseif (Test-Path $defaultSdk) {
+  $defaultSdk
+} else {
+  $null
+}
+
+if (-not $javaHome) {
+  throw 'JDK not found. Install Android Studio or set JAVA_HOME to a valid JDK.'
+}
+
+if (-not $androidHome) {
+  throw 'Android SDK not found. Open Android Studio SDK Manager or set ANDROID_HOME.'
 }
 
 $env:JAVA_HOME = $javaHome
 $env:ANDROID_HOME = $androidHome
-$env:EXPO_NO_METRO_WORKSPACE_ROOT = "1"
-$env:PATH = "$javaHome\bin;$androidHome\platform-tools;$env:PATH"
+$env:NODE_ENV = 'production'
+$env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
+$env:EXPO_NO_METRO_WORKSPACE_ROOT = '1'
+$env:PATH = (Join-Path $javaHome 'bin') + ';' + (Join-Path $androidHome 'platform-tools') + ';' + $env:PATH
 
-$mobileDir = Join-Path $PSScriptRoot ".."
-$androidDir = Join-Path $mobileDir "android"
+$androidDir = Join-Path $mobileDir 'android'
+$appBuildGradle = Join-Path $androidDir 'app\build.gradle'
 $sdkDir = ($androidHome -replace '\\', '/')
 
-if (-not (Test-Path (Join-Path $androidDir "gradlew.bat"))) {
-  Write-Host "Running expo prebuild (env vars from .env will be baked into app.config)..."
-  Push-Location $mobileDir
-  npx expo prebuild --platform android --clean
-  Pop-Location
+function Test-MonorepoGradlePatch {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { return $false }
+  $content = Get-Content $Path -Raw
+  return ($content -match 'root = file\("\.\./\.\./"\)') -and ($content -match 'resolveEntryPoint')
 }
 
-$localProps = Join-Path $androidDir "local.properties"
+$needsPrebuild = $Clean -or -not (Test-Path (Join-Path $androidDir 'gradlew.bat')) -or -not (Test-MonorepoGradlePatch $appBuildGradle)
+if ($needsPrebuild) {
+  Write-Host 'Running expo prebuild (env vars from .env will be baked into app.config)...'
+  Push-Location $mobileDir
+  try {
+    if ($Clean -or -not (Test-Path (Join-Path $androidDir 'gradlew.bat'))) {
+      npx expo prebuild --platform android --clean
+    } else {
+      npx expo prebuild --platform android
+    }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  } finally {
+    Pop-Location
+  }
+}
+
+$localProps = Join-Path $androidDir 'local.properties'
 if (-not (Test-Path $localProps)) {
   Set-Content -Path $localProps -Value "sdk.dir=$sdkDir"
 } else {
   $content = Get-Content $localProps -Raw
-  if ($content -notmatch "sdk\.dir=") {
+  if ($content -notmatch 'sdk\.dir=') {
     Add-Content -Path $localProps -Value "sdk.dir=$sdkDir"
   }
 }
 
+Write-Host 'Building release APK with Gradle...'
 Push-Location $androidDir
-.\gradlew assembleRelease
-Pop-Location
-
-$apk = Join-Path $androidDir "app\build\outputs\apk\release\app-release.apk"
-if (Test-Path $apk) {
-  Write-Host ""
-  Write-Host "APK ready:" -ForegroundColor Green
-  Write-Host $apk
-  if (-not $env:EXPO_PUBLIC_SUPABASE_URL) {
-    Write-Host ""
-    Write-Host "Warning: EXPO_PUBLIC_SUPABASE_URL is empty — set it in repo root .env before building." -ForegroundColor Yellow
+try {
+  & .\gradlew.bat assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+  if ($LASTEXITCODE -ne 0) {
+    throw "Gradle build failed with exit code $LASTEXITCODE"
   }
-} else {
-  Write-Host "Build finished but APK not found at expected path." -ForegroundColor Yellow
+} finally {
+  Pop-Location
+}
+
+$apk = Join-Path $androidDir 'app\build\outputs\apk\release\app-release.apk'
+if (-not (Test-Path $apk)) {
+  throw "Build finished but APK not found at $apk"
+}
+
+$assetsDir = Join-Path $mobileDir 'assets'
+$webDownloadDir = Join-Path $repoRoot 'apps\web\public\downloads'
+$assetApk = Join-Path $assetsDir 'perakita.apk'
+$webApk = Join-Path $webDownloadDir 'perakita.apk'
+
+New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
+New-Item -ItemType Directory -Force -Path $webDownloadDir | Out-Null
+Copy-Item -Path $apk -Destination $assetApk -Force
+Copy-Item -Path $apk -Destination $webApk -Force
+
+Write-Host ''
+Write-Host 'APK ready:' -ForegroundColor Green
+Write-Host $apk
+Write-Host 'Copied to:' -ForegroundColor Green
+Write-Host $assetApk
+Write-Host $webApk
+
+if (-not $env:EXPO_PUBLIC_SUPABASE_URL) {
+  Write-Host ''
+  Write-Host 'Warning: EXPO_PUBLIC_SUPABASE_URL is empty. Set it in repo root .env before building.' -ForegroundColor Yellow
 }

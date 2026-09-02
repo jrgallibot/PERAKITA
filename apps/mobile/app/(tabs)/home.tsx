@@ -21,6 +21,7 @@ import { getProfile } from '@/services/settingsService';
 import { syncNow } from '@/services/syncService';
 import { loadPesoDashboard } from '@/services/pesoEngineService';
 import { loadGoalsDashboard } from '@/services/savingsGoalService';
+import { accountRepository } from '@/database/repositories/accountRepository';
 import {
   Screen,
   Card,
@@ -46,6 +47,7 @@ import {
   SavingsGoalsDashboardSection,
 } from '@/components/peso';
 import { DueTodayBanner } from '@/components/DueTodayBanner';
+import { WalletBalancesRow } from '@/components/WalletBalancesRow';
 import { SpendingDonut } from '@/components/charts/SpendingDonut';
 import { signedTransactionAmount } from '@/lib/transactionLabels';
 import { getWebAppLink } from '@/lib/webApp';
@@ -102,6 +104,12 @@ export default function HomeScreen() {
       ]);
       return { peso, profile, transactions, spending, loans, budgets, goalsData };
     },
+  });
+
+  const { data: walletAccounts = [] } = useQuery({
+    queryKey: ['accounts', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => accountRepository.ensureDefaults(user!.id),
   });
 
   const peso = data?.peso;
@@ -200,6 +208,8 @@ export default function HomeScreen() {
               safeToSpendToday={peso.safeToSpendToday}
             />
           ) : null}
+
+          <WalletBalancesRow accounts={walletAccounts} />
 
           <NotificationAlertsList
             alerts={notificationAlerts}

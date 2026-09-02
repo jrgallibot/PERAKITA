@@ -391,6 +391,22 @@ CREATE INDEX IF NOT EXISTS idx_goal_milestones_goal ON goal_milestones(goal_id);
 ALTER TABLE profiles ADD COLUMN notify_goals INTEGER NOT NULL DEFAULT 1;
 `,
   },
+  {
+    name: '010_linked_accounts',
+    sql: `
+ALTER TABLE accounts ADD COLUMN provider TEXT;
+ALTER TABLE accounts ADD COLUMN masked_identifier TEXT;
+ALTER TABLE accounts ADD COLUMN is_linked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE accounts ADD COLUMN linked_at TEXT;
+ALTER TABLE accounts ADD COLUMN last_balance_sync_at TEXT;
+
+UPDATE accounts SET provider = 'cash' WHERE lower(name) = 'cash' AND provider IS NULL;
+UPDATE accounts SET provider = 'gcash' WHERE lower(name) = 'gcash' AND provider IS NULL;
+UPDATE accounts SET provider = 'maya' WHERE lower(name) = 'maya' AND provider IS NULL;
+UPDATE accounts SET provider = 'bank' WHERE lower(name) = 'bank' AND provider IS NULL;
+UPDATE accounts SET provider = 'other' WHERE provider IS NULL;
+`,
+  },
 ];
 
 function splitSqlStatements(sql: string): string[] {

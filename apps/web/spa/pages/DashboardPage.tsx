@@ -15,6 +15,8 @@ import {
   loadWebPesoDashboard,
   saveWebOnboarding,
 } from '@/lib/peso';
+import { loadDashboard, type WebAccount } from '@/lib/finance';
+import { WalletBalancesRow } from '@/components/WalletBalancesRow';
 
 function StatCard({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
@@ -32,6 +34,7 @@ export function DashboardPage() {
   const [insight, setInsight] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<PesoNotificationAlert[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<WebAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingForm, setOnboardingForm] = useState({
@@ -51,10 +54,12 @@ export function DashboardPage() {
       isWebOnboardingComplete(user.id),
       fetchNotificationPrefs(user.id),
       loadWebBudgetRows(user.id),
+      loadDashboard(user.id),
     ])
-      .then(async ([data, onboarded, prefs, budgets]) => {
+      .then(async ([data, onboarded, prefs, budgets, finance]) => {
         if (cancelled) return;
         setPeso(data);
+        setAccounts(finance.accounts);
         if (!onboarded) setShowOnboarding(true);
         setAlerts(buildPesoNotificationAlerts(data, prefs, budgets));
         const ai = await fetchWebAiInsight(data);
@@ -155,6 +160,8 @@ export function DashboardPage() {
           </div>
         ) : peso ? (
           <div className="mt-8 space-y-6">
+            <WalletBalancesRow accounts={accounts} />
+
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Current balance" value={fmt(peso.currentBalance)} />
               <StatCard label="Real available" value={fmt(peso.realAvailable)} />

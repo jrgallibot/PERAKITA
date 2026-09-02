@@ -106,7 +106,37 @@ Until that secret is set, “Email me now” will explain that `RESEND_API_KEY` 
 pnpm dev:mobile   # Expo dev server
 pnpm dev:web      # Web SPA on http://localhost:3000
 pnpm typecheck    # TypeScript across workspace
+pnpm build:apk    # Release APK (Android Studio SDK + repo root .env)
 ```
+
+### Linked wallets (GCash / Maya / bank)
+
+PeraKita does **not** connect live to GCash, Maya, or bank APIs. You link each wallet in the app, open the real app to check your balance, then enter it in PeraKita to sync:
+
+- **Mobile:** Home → Wallet balances, or Settings → Linked wallets & banks
+- **Web:** Dashboard wallet cards, Settings → Linked wallets, or Manage finances → Linked wallets & banks
+
+Balance updates create a reconciliation adjustment when the amount differs from what PeraKita already had.
+
+### Build APK locally
+
+1. Install [Android Studio](https://developer.android.com/studio) (JDK + Android SDK).
+2. Put `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the repo root `.env`.
+3. From the repo root:
+
+```bash
+pnpm build:apk
+```
+
+Or from `apps/mobile`: `pnpm build:apk`. Use `pnpm --filter @perakita/mobile build:apk -- -Clean` to regenerate the native `android/` folder after config changes.
+
+On Windows, local Gradle builds need [long paths enabled](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation) because React Native codegen paths can exceed 260 characters. If local Gradle still fails, use the cloud builder instead:
+
+```bash
+pnpm build:apk:eas
+```
+
+Output (local): `apps/mobile/android/app/build/outputs/apk/release/app-release.apk` (also copied to `apps/mobile/assets/perakita.apk` and `apps/web/public/downloads/perakita.apk`).
 
 ## Architecture
 

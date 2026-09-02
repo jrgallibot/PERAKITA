@@ -48,7 +48,7 @@ const TABLE_PRIORITY: Record<string, number> = {
 };
 
 const BOOL_FIELDS: Record<SyncTable, string[]> = {
-  accounts: ['is_active'],
+  accounts: ['is_active', 'is_linked'],
   categories: ['is_default', 'is_active'],
   transactions: [],
   loans: [],
@@ -93,6 +93,11 @@ const TABLE_COLUMNS: Record<SyncTable, string[]> = {
     'current_balance',
     'currency',
     'is_active',
+    'provider',
+    'masked_identifier',
+    'is_linked',
+    'linked_at',
+    'last_balance_sync_at',
     'created_at',
     'updated_at',
     'deleted_at',

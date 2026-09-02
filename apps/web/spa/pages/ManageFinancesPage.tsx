@@ -23,11 +23,16 @@ import {
   deleteWebIncome,
   deleteWebLoan,
   formatCurrency,
+  formatLastBalanceSync,
+  linkWebAccount,
+  listLinkableWebAccounts,
   loadDashboard,
   recordWebLoanPayment,
+  refreshWebLinkedBalance,
   repairWebBudgetTrackSpends,
   signedTransactionAmount,
   transactionKindLabel,
+  unlinkWebAccount,
   updateWebBudget,
   type WebAccount,
   type WebBudget,
@@ -99,6 +104,9 @@ export function ManageFinancesPage() {
   const [spendDates, setSpendDates] = useState<Record<string, string>>({});
   const [spendAccountIds, setSpendAccountIds] = useState<Record<string, string>>({});
   const [budgetCaps, setBudgetCaps] = useState<Record<string, string>>({});
+  const [walletActiveId, setWalletActiveId] = useState<string | null>(null);
+  const [walletBalances, setWalletBalances] = useState<Record<string, string>>({});
+  const [walletMaskedIds, setWalletMaskedIds] = useState<Record<string, string>>({});
 
   const [budgetName, setBudgetName] = useState(month.name);
   const [budgetTotal, setBudgetTotal] = useState('');
@@ -502,6 +510,7 @@ export function ManageFinancesPage() {
     { label: 'Income This Month', value: income, tone: 'text-emerald-600 dark:text-emerald-400' },
     { label: 'Expenses This Month', value: expenses, tone: 'text-red-500' },
   ];
+  const linkableWallets = useMemo(() => listLinkableWebAccounts(accounts), [accounts]);
 
   return (
     <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
@@ -546,6 +555,163 @@ export function ManageFinancesPage() {
             </div>
           ))}
         </div>
+
+        <section
+          className="mt-10 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark"
+          id="linked-wallets"
+        >
+          <h2 className="text-lg font-bold">Linked wallets & banks</h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            PeraKita does not connect directly to GCash, Maya, or your bank. Open those apps, check your balance,
+            then enter it here to keep each wallet in sync.
+          </p>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            {linkableWallets.map((wallet) => {
+              const isOpen = walletActiveId === wallet.id;
+              return (
+                <div
+                  key={wallet.id}
+                  className={`rounded-2xl border p-4 ${wallet.is_linked ? 'border-primary/40 bg-primary/5' : 'border-[var(--border)]'}`}
+                >
+                  <button
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                    onClick={() => {
+                      setWalletActiveId(isOpen ? null : wallet.id);
+                      setWalletBalances((current) => ({
+                        ...current,
+                        [wallet.id]: current[wallet.id] ?? String(wallet.current_balance),
+                      }));
+                      setWalletMaskedIds((current) => ({
+                        ...current,
+                        [wallet.id]: current[wallet.id] ?? wallet.masked_identifier ?? '',
+                      }));
+                    }}
+                    type="button"
+                  >
+                    <div>
+                      <p className="font-semibold">{wallet.name}</p>
+                      {wallet.masked_identifier ? (
+                        <p className="text-xs text-[var(--muted)]">{wallet.masked_identifier}</p>
+                      ) : null}
+                      <p className="mt-2 text-xl font-extrabold tabular-nums">
+                        {formatCurrency(wallet.current_balance)}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {wallet.is_linked
+                          ? formatLastBalanceSync(wallet.last_balance_sync_at) ?? 'Linked'
+                          : 'Not linked yet'}
+                      </p>
+                    </div>
+                    <span className="text-sm text-[var(--muted)]">{isOpen ? '−' : '+'}</span>
+                  </button>
+
+                  {isOpen ? (
+                    <div className="mt-4 space-y-3">
+                      {!wallet.is_linked ? (
+                        <label className="block text-sm font-medium">
+                          Account hint (optional)
+                          <input
+                            className="auth-input mt-1"
+                            onChange={(event) =>
+                              setWalletMaskedIds((current) => ({
+                                ...current,
+                                [wallet.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="09** *** 1234"
+                            value={walletMaskedIds[wallet.id] ?? ''}
+                          />
+                        </label>
+                      ) : null}
+                      <label className="block text-sm font-medium">
+                        Balance from your app (PHP)
+                        <input
+                          className="auth-input mt-1"
+                          inputMode="decimal"
+                          onChange={(event) =>
+                            setWalletBalances((current) => ({
+                              ...current,
+                              [wallet.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="0.00"
+                          value={walletBalances[wallet.id] ?? String(wallet.current_balance)}
+                        />
+                      </label>
+                      <button
+                        className="w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                        disabled={saving}
+                        onClick={() => {
+                          void (async () => {
+                            if (!user?.id) return;
+                            const parsed = Number((walletBalances[wallet.id] ?? '').replace(/,/g, '').trim());
+                            if (!Number.isFinite(parsed) || parsed < 0) {
+                              notify.error('Enter a valid balance from your wallet or bank app.');
+                              return;
+                            }
+                            setSaving(true);
+                            try {
+                              if (wallet.is_linked) {
+                                await refreshWebLinkedBalance({
+                                  userId: user.id,
+                                  accountId: wallet.id,
+                                  reportedBalance: parsed,
+                                });
+                                notify.success(`${wallet.name} balance updated`);
+                              } else {
+                                await linkWebAccount({
+                                  userId: user.id,
+                                  accountId: wallet.id,
+                                  reportedBalance: parsed,
+                                  maskedIdentifier: walletMaskedIds[wallet.id] ?? null,
+                                });
+                                notify.success(`${wallet.name} linked`);
+                              }
+                              await refresh(user.id);
+                              setWalletActiveId(null);
+                            } catch (err) {
+                              notify.error(err instanceof Error ? err.message : 'Could not save wallet.');
+                            } finally {
+                              setSaving(false);
+                            }
+                          })();
+                        }}
+                        type="button"
+                      >
+                        {wallet.is_linked ? 'Refresh balance' : 'Link wallet'}
+                      </button>
+                      {wallet.is_linked ? (
+                        <button
+                          className="w-full rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold"
+                          disabled={saving}
+                          onClick={() => {
+                            void (async () => {
+                              if (!user?.id) return;
+                              setSaving(true);
+                              try {
+                                await unlinkWebAccount(user.id, wallet.id);
+                                await refresh(user.id);
+                                setWalletActiveId(null);
+                                notify.success(`${wallet.name} unlinked`);
+                              } catch (err) {
+                                notify.error(err instanceof Error ? err.message : 'Could not unlink wallet.');
+                              } finally {
+                                setSaving(false);
+                              }
+                            })();
+                          }}
+                          type="button"
+                        >
+                          Unlink
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_1.1fr]">
           <form
