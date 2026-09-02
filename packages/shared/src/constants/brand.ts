@@ -15,11 +15,13 @@ export const APP_ABOUT_POINTS = [
 export const APP_CREDIT = `Created and developed by ${APP_DEVELOPER}`;
 
 /** Android APK hosted on the web app (apps/web/public/downloads). */
-export const APP_ANDROID_APK_PATH = '/downloads/perakita.apk';
+export const APP_ANDROID_APK_BUILD = '2026-09-02';
+export const APP_ANDROID_APK_PATH = `/downloads/perakita.apk?v=${APP_ANDROID_APK_BUILD}`;
 export const APP_ANDROID_APK_FILENAME = 'PeraKita.apk';
-export const APP_ANDROID_APK_LABEL = 'Android APK · Latest build';
+export const APP_ANDROID_APK_LABEL = 'Android APK · Sep 2, 2026 build';
+export const APP_ANDROID_APK_SIZE_LABEL = '~36 MB';
 export const APP_ANDROID_APK_BLURB =
-  'Install on Android for offline-first pesos, budgets, and kinsena loans. Sign in with the same account to sync with the web dashboard.';
+  'Install on Android for offline-first pesos, budgets, kinsena loans, and linked GCash/Maya/bank balances. Sign in with the same account to sync with the web dashboard.';
 
 /** Landing / marketing copy */
 export const APP_CONCEPT_TITLE = 'Built for how money actually moves';

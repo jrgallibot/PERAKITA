@@ -9,6 +9,7 @@ import {
   APP_ANDROID_APK_FILENAME,
   APP_ANDROID_APK_LABEL,
   APP_ANDROID_APK_PATH,
+  APP_ANDROID_APK_SIZE_LABEL,
   APP_CONCEPT,
   APP_CONCEPT_TITLE,
   APP_CREDIT,
@@ -259,9 +260,11 @@ export function LandingPage() {
                 {APP_NAME}
               </p>
               <p className="mt-1 text-sm font-semibold text-primary">{APP_ANDROID_APK_LABEL}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">{APP_ANDROID_APK_SIZE_LABEL}</p>
               <ul className="mt-4 space-y-2 text-[15px] leading-6 text-[var(--muted)]">
                 <li>• Supabase sign-in built in (same account as the web)</li>
                 <li>• Track income, expenses, and Current Balance offline</li>
+                <li>• Linked wallets for GCash, Maya, and bank balance refresh</li>
                 <li>• Budgets and kinsena-style loans on your phone</li>
                 <li>• Sync to this dashboard when you reconnect</li>
               </ul>
