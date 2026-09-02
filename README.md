@@ -130,7 +130,13 @@ pnpm build:apk
 
 Or from `apps/mobile`: `pnpm build:apk`. Use `pnpm --filter @perakita/mobile build:apk -- -Clean` to regenerate the native `android/` folder after config changes.
 
-On Windows, local Gradle builds need [long paths enabled](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation) because React Native codegen paths can exceed 260 characters. If local Gradle still fails, use the cloud builder instead:
+On Windows, React Native native builds exceed the 260-character path limit unless long paths are enabled. Run **once as Administrator**:
+
+```bash
+pnpm --filter @perakita/mobile enable:long-paths
+```
+
+Sign out/in (or reboot), then run `pnpm build:apk` again. If local Gradle still fails, use the cloud builder instead:
 
 ```bash
 pnpm build:apk:eas

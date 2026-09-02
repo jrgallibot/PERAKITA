@@ -12,6 +12,7 @@
     "dev:web": "pnpm --filter @perakita/web dev",
     "build:apk": "pnpm --filter @perakita/mobile build:apk",
     "build:apk:eas": "pnpm --filter @perakita/mobile build:apk:eas",
+    "enable:long-paths": "pnpm --filter @perakita/mobile enable:long-paths",
     "typecheck": "pnpm --filter @perakita/shared --filter @perakita/mobile --filter @perakita/web run typecheck",
     "lint": "pnpm -r lint",
     "email:build": "node scripts/build-email-templates.cjs",

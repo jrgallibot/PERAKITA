@@ -49,6 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     './plugins/withMonorepoAndroidRoot',
+    './plugins/withWindowsAndroidPaths',
     'expo-router',
     'expo-secure-store',
     'expo-sqlite',

@@ -6,12 +6,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$mobileDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$repoRoot = (Resolve-Path (Join-Path $mobileDir '..\..')).Path
-$envFile = Join-Path $repoRoot '.env'
+$scriptMobileDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$scriptRepoRoot = (Resolve-Path (Join-Path $scriptMobileDir '..\..')).Path
+$envFile = Join-Path $scriptRepoRoot '.env'
+$mobileDir = $scriptMobileDir
+$repoRoot = $scriptRepoRoot
 
-if ($env:OS -match 'Windows' -and $repoRoot.Length -gt 50) {
-  Write-Host 'Note: This repo path is long for Windows native builds. Enable long paths or run pnpm build:apk:eas if Gradle fails.' -ForegroundColor Yellow
+function Test-WindowsLongPathsEnabled {
+  try {
+    $item = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -ErrorAction SilentlyContinue
+    return $item.LongPathsEnabled -eq 1
+  } catch {
+    return $false
+  }
+}
+
+if ($env:OS -match 'Windows') {
+  if (-not (Test-WindowsLongPathsEnabled)) {
+    Write-Host 'Windows long paths are disabled. Enable them to avoid native build failures:' -ForegroundColor Yellow
+    Write-Host '  gpedit.msc -> Computer Configuration -> Administrative Templates -> System -> Filesystem -> Enable Win32 long paths = Enabled' -ForegroundColor Yellow
+    Write-Host '  Or run PowerShell as Administrator:' -ForegroundColor Yellow
+    Write-Host '  New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem -Name LongPathsEnabled -Value 1 -PropertyType DWord -Force' -ForegroundColor Yellow
+  }
 }
 
 if (Test-Path $envFile) {
@@ -67,7 +83,7 @@ if (-not $androidHome) {
 $env:JAVA_HOME = $javaHome
 $env:ANDROID_HOME = $androidHome
 $env:NODE_ENV = 'production'
-$env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
+$env:GRADLE_USER_HOME = Join-Path $env:LOCALAPPDATA 'pk-gradle'
 $env:EXPO_NO_METRO_WORKSPACE_ROOT = '1'
 $env:PATH = (Join-Path $javaHome 'bin') + ';' + (Join-Path $androidHome 'platform-tools') + ';' + $env:PATH
 
@@ -82,7 +98,14 @@ function Test-MonorepoGradlePatch {
   return ($content -match 'root = file\("\.\./\.\./"\)') -and ($content -match 'resolveEntryPoint')
 }
 
-$needsPrebuild = $Clean -or -not (Test-Path (Join-Path $androidDir 'gradlew.bat')) -or -not (Test-MonorepoGradlePatch $appBuildGradle)
+function Test-WindowsPathPatch {
+  param([string]$Path)
+  if (-not (Test-Path $Path)) { return $false }
+  $content = Get-Content $Path -Raw
+  return $content -match 'CMAKE_OBJECT_PATH_MAX'
+}
+
+$needsPrebuild = $Clean -or -not (Test-Path (Join-Path $androidDir 'gradlew.bat')) -or -not (Test-MonorepoGradlePatch $appBuildGradle) -or -not (Test-WindowsPathPatch $appBuildGradle)
 if ($needsPrebuild) {
   Write-Host 'Running expo prebuild (env vars from .env will be baked into app.config)...'
   Push-Location $mobileDir
@@ -108,6 +131,18 @@ if (-not (Test-Path $localProps)) {
   }
 }
 
+$cxxDir = Join-Path $androidDir 'app\.cxx'
+$stagingDir = Join-Path $env:LOCALAPPDATA 'pk-cxx'
+if ($env:OS -match 'Windows') {
+  if (Test-Path $cxxDir) {
+    Write-Host 'Clearing native CMake cache (.cxx)...' -ForegroundColor Cyan
+    Remove-Item -Recurse -Force $cxxDir
+  }
+  if (Test-Path $stagingDir) {
+    Remove-Item -Recurse -Force $stagingDir
+  }
+}
+
 Write-Host 'Building release APK with Gradle...'
 Push-Location $androidDir
 try {
@@ -124,8 +159,8 @@ if (-not (Test-Path $apk)) {
   throw "Build finished but APK not found at $apk"
 }
 
-$assetsDir = Join-Path $mobileDir 'assets'
-$webDownloadDir = Join-Path $repoRoot 'apps\web\public\downloads'
+$assetsDir = Join-Path $scriptMobileDir 'assets'
+$webDownloadDir = Join-Path $scriptRepoRoot 'apps\web\public\downloads'
 $assetApk = Join-Path $assetsDir 'perakita.apk'
 $webApk = Join-Path $webDownloadDir 'perakita.apk'
 
