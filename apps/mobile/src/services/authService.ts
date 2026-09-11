@@ -297,8 +297,10 @@ export async function registerSmart(input: {
 }
 
 export async function signOutAll(): Promise<void> {
-  const userId = useAuthStore.getState().user?.id;
-  if (userId) await clearPendingPassword(userId);
+  const { user, authMode } = useAuthStore.getState();
+  if (user?.id && authMode === 'cloud') {
+    await clearPendingPassword(user.id);
+  }
   await clearLocalSession();
   useAuthStore.getState().clearAuth();
   if (isSupabaseConfigured) {
@@ -385,7 +387,14 @@ export async function syncPendingAuth(): Promise<void> {
 export async function tryRestoreCloudSession(): Promise<boolean> {
   if (!isSupabaseConfigured || !useNetworkStore.getState().isConnected) return false;
 
-  const { data: { session } } = await supabase.auth.getSession();
+  let session: Session | null = null;
+  try {
+    const result = await supabase.auth.getSession();
+    session = result.data.session;
+  } catch {
+    return false;
+  }
+
   if (session?.user) {
     if (useAuthStore.getState().authMode !== 'cloud') {
       useAuthStore.getState().setCloudSession(session);

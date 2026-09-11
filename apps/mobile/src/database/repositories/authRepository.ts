@@ -51,7 +51,9 @@ export const authRepository = {
   async findPendingSync(): Promise<LocalCredential[]> {
     const db = await getDatabase();
     const rows = await db.getAllAsync<Record<string, unknown>>(
-      `SELECT * FROM local_credentials WHERE auth_sync_status = 'pending' ORDER BY created_at ASC`
+      `SELECT * FROM local_credentials
+       WHERE auth_sync_status IN ('pending', 'failed')
+       ORDER BY created_at ASC`
     );
     return rows.map(mapRow);
   },

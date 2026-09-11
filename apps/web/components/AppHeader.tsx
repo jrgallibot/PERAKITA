@@ -12,6 +12,8 @@ export function AppHeader() {
   const onManage = location.pathname === '/manage';
   const onDashboard = location.pathname === '/dashboard';
   const onReports = location.pathname === '/reports';
+  const onSavings = location.pathname === '/goals';
+  const onEmergencyFund = location.pathname === '/emergency-fund';
 
   const navLinkClass = (active: boolean) =>
     `rounded-xl border px-3 py-2 text-sm font-semibold sm:px-4 ${
@@ -39,6 +41,12 @@ export function AppHeader() {
           </Link>
           <Link className={navLinkClass(onManage)} to="/manage">
             Manage
+          </Link>
+          <Link className={navLinkClass(onSavings)} to="/goals">
+            Savings
+          </Link>
+          <Link className={navLinkClass(onEmergencyFund)} to="/emergency-fund">
+            Emergency
           </Link>
           {onSettings ? (
             <Link className={navLinkClass(false)} to="/dashboard">

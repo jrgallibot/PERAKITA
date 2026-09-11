@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import type { NotificationPrefs } from '@perakita/shared';
 import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { loadPesoDashboard } from '@/services/pesoEngineService';
@@ -19,11 +18,9 @@ export function usePesoNotificationScheduler(userId: string | undefined) {
     await syncPesoNotifications(snapshot, prefs, budgetRows);
   }, [userId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

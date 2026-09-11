@@ -40,6 +40,7 @@ function RootNav() {
         <Stack.Screen name="add-budget" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-goal" options={{ presentation: 'modal' }} />
         <Stack.Screen name="add-contribution" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="emergency-fund" options={{ presentation: 'modal' }} />
         <Stack.Screen name="goal/[id]" />
         <Stack.Screen name="add-recurring-expense" options={{ presentation: 'modal' }} />
         <Stack.Screen name="ai-assistant" options={{ presentation: 'modal' }} />
@@ -58,8 +59,8 @@ export default function RootLayout() {
               <PinLockGate>
                 <RootNav />
               </PinLockGate>
-              <ToastHost />
             </FontProvider>
+            <ToastHost />
           </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

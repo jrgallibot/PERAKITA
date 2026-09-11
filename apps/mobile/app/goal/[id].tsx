@@ -100,7 +100,7 @@ export default function GoalDetailScreen() {
     <Screen scroll={false} padded={false}>
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <IconButton accessibilityLabel="Back" name="arrow-back" onPress={() => router.back()} />
-        <AppText variant="title">Savings Goal</AppText>
+        <AppText variant="title">Savings</AppText>
         <View style={{ width: 40 }} />
       </View>
 

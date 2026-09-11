@@ -41,6 +41,7 @@ import {
   type WebLoanPayment,
   type WebTransaction,
 } from '@/lib/finance';
+import { loadWebEmergencyFund, loadWebSavingsDashboard } from '@/lib/savings';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -79,6 +80,8 @@ export function ManageFinancesPage() {
   const [loans, setLoans] = useState<WebLoan[]>([]);
   const [payments, setPayments] = useState<WebLoanPayment[]>([]);
   const [budgets, setBudgets] = useState<WebBudget[]>([]);
+  const [savings, setSavings] = useState<Awaited<ReturnType<typeof loadWebSavingsDashboard>> | null>(null);
+  const [emergency, setEmergency] = useState<Awaited<ReturnType<typeof loadWebEmergencyFund>> | null>(null);
 
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amount, setAmount] = useState('');
@@ -146,7 +149,11 @@ export function ManageFinancesPage() {
   );
 
   async function refresh(userId: string) {
-    const data = await loadDashboard(userId);
+    const [data, savingsData, emergencyData] = await Promise.all([
+      loadDashboard(userId),
+      loadWebSavingsDashboard(userId),
+      loadWebEmergencyFund(userId),
+    ]);
     setAccounts(data.accounts);
     setCategories(data.categories);
     setTransactions(data.transactions);
@@ -156,6 +163,8 @@ export function ManageFinancesPage() {
     setBalance(data.balance);
     setIncome(data.income);
     setExpenses(data.expenses);
+    setSavings(savingsData);
+    setEmergency(emergencyData);
     setAccountId((current) => current || data.accounts[0]?.id || '');
   }
 
@@ -167,7 +176,11 @@ export function ManageFinancesPage() {
       try {
         await repairWebBudgetTrackSpends(user.id);
         if (!active) return;
-        const data = await loadDashboard(user.id);
+        const [data, savingsData, emergencyData] = await Promise.all([
+          loadDashboard(user.id),
+          loadWebSavingsDashboard(user.id),
+          loadWebEmergencyFund(user.id),
+        ]);
         if (!active) return;
         setAccounts(data.accounts);
         setCategories(data.categories);
@@ -178,6 +191,8 @@ export function ManageFinancesPage() {
         setBalance(data.balance);
         setIncome(data.income);
         setExpenses(data.expenses);
+        setSavings(savingsData);
+        setEmergency(emergencyData);
         setAccountId(data.accounts[0]?.id ?? '');
         setError(null);
       } catch (err: unknown) {
@@ -555,6 +570,76 @@ export function ManageFinancesPage() {
             </div>
           ))}
         </div>
+
+        <section className="mt-8 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">Savings</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Create goals and record track-only contributions.
+                </p>
+              </div>
+              <Link className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white dark:text-slate-950" to="/goals">
+                Manage savings
+              </Link>
+            </div>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
+              <div
+                className="h-full rounded-full bg-[var(--primary)]"
+                style={{ width: `${Math.min(100, savings?.summary.overallProgress ?? 0)}%` }}
+              />
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-sm text-[var(--muted)]">Saved</p>
+                <p className="mt-1 text-xl font-bold">{formatCurrency(savings?.summary.totalSaved ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--muted)]">Targets</p>
+                <p className="mt-1 text-xl font-bold">{formatCurrency(savings?.summary.totalTargets ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--muted)]">Active goals</p>
+                <p className="mt-1 text-xl font-bold">{savings?.summary.activeGoals ?? 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">Emergency fund</h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  Update your dedicated safety net target and current saved amount.
+                </p>
+              </div>
+              <Link className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white dark:text-slate-950" to="/emergency-fund">
+                Manage fund
+              </Link>
+            </div>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
+              <div
+                className="h-full rounded-full bg-[var(--primary)]"
+                style={{ width: `${Math.min(100, emergency?.summary.progressPercentage ?? 0)}%` }}
+              />
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-sm text-[var(--muted)]">Saved</p>
+                <p className="mt-1 text-xl font-bold">{formatCurrency(emergency?.summary.currentAmount ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--muted)]">Target</p>
+                <p className="mt-1 text-xl font-bold">{formatCurrency(emergency?.summary.targetAmount ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-[var(--muted)]">Months</p>
+                <p className="mt-1 text-xl font-bold">{(emergency?.summary.monthsCovered ?? 0).toFixed(1)}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section
           className="mt-10 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-6 shadow-card dark:shadow-card-dark"

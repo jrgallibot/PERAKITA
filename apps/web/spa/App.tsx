@@ -15,6 +15,7 @@ import { ManageFinancesPage } from '@/spa/pages/ManageFinancesPage';
 import { SettingsPage } from '@/spa/pages/SettingsPage';
 import { GoalsPage } from '@/spa/pages/GoalsPage';
 import { AssistantPage } from '@/spa/pages/AssistantPage';
+import { EmergencyFundPage } from '@/spa/pages/EmergencyFundPage';
 import { ToastProvider } from '@/components/Toast';
 import { Providers } from '@/components/Providers';
 
@@ -98,6 +99,14 @@ export function SpaApp() {
                   </ProtectedRoute>
                 }
                 path="/goals"
+              />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <EmergencyFundPage />
+                  </ProtectedRoute>
+                }
+                path="/emergency-fund"
               />
               <Route
                 element={

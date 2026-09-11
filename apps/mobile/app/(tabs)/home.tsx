@@ -21,6 +21,7 @@ import { getProfile } from '@/services/settingsService';
 import { syncNow } from '@/services/syncService';
 import { loadPesoDashboard } from '@/services/pesoEngineService';
 import { loadGoalsDashboard } from '@/services/savingsGoalService';
+import { loadEmergencyFund } from '@/services/emergencyFundService';
 import { accountRepository } from '@/database/repositories/accountRepository';
 import {
   Screen,
@@ -93,7 +94,7 @@ export default function HomeScreen() {
     queryKey: ['peso-dashboard', user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
-      const [peso, profile, transactions, spending, loans, budgets, goalsData] = await Promise.all([
+      const [peso, profile, transactions, spending, loans, budgets, goalsData, emergencyData] = await Promise.all([
         loadPesoDashboard(user!.id),
         getProfile(user!.id),
         transactionRepository.findAll(user!.id, 5),
@@ -101,8 +102,9 @@ export default function HomeScreen() {
         loanRepository.findAll(user!.id),
         budgetRepository.findAllWithProgress(user!.id),
         loadGoalsDashboard(user!.id),
+        loadEmergencyFund(user!.id),
       ]);
-      return { peso, profile, transactions, spending, loans, budgets, goalsData };
+      return { peso, profile, transactions, spending, loans, budgets, goalsData, emergencyData };
     },
   });
 
@@ -178,7 +180,7 @@ export default function HomeScreen() {
             <View style={styles.identity}>
               <BrandLogo showLabel size={40} />
               <AppText muted variant="caption">
-                {getGreeting()} · Know where your money goes
+                {getGreeting()} - Know where your money goes
               </AppText>
               <AppText variant="display" style={styles.name}>
                 {name}
@@ -261,6 +263,34 @@ export default function HomeScreen() {
             />
           ) : null}
 
+          {data?.emergencyData ? (
+            <Card style={styles.emergencyCard}>
+              <SectionHeader
+                actionLabel="Open"
+                onAction={() => router.push('/emergency-fund' as never)}
+                subtitle={`${data.emergencyData.summary.progressPercentage.toFixed(1)}% funded`}
+                title="Emergency fund"
+              />
+              <View style={[styles.emergencyBar, { backgroundColor: colors.inputBackground }]}>
+                <View
+                  style={[
+                    styles.emergencyBarFill,
+                    {
+                      width: `${Math.min(100, data.emergencyData.summary.progressPercentage)}%`,
+                      backgroundColor: colors.primary,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.emergencyStats}>
+                <AppText variant="subtitle">{formatCurrency(data.emergencyData.summary.currentAmount)}</AppText>
+                <AppText muted variant="caption">
+                  {data.emergencyData.summary.monthsCovered.toFixed(1)} months covered
+                </AppText>
+              </View>
+            </Card>
+          ) : null}
+
           {peso ? <UpcomingBillsList bills={peso.upcomingBills} /> : null}
 
           <SectionHeader eyebrow="Actions" subtitle="Record money in seconds" title="Quick actions" />
@@ -279,10 +309,16 @@ export default function HomeScreen() {
                 onPress: () => router.push('/add-transaction?type=income' as never),
               },
               {
-                label: 'Goal',
-                icon: 'flag-outline',
+                label: 'Savings',
+                icon: 'wallet-outline',
                 tone: 'budget',
                 onPress: () => router.push('/add-goal' as never),
+              },
+              {
+                label: 'Emergency',
+                icon: 'shield-checkmark-outline',
+                tone: 'loan',
+                onPress: () => router.push('/emergency-fund' as never),
               },
               {
                 label: 'AI Help',
@@ -378,6 +414,10 @@ const styles = StyleSheet.create({
   contentTablet: { maxWidth: 720, alignSelf: 'center', width: '100%' },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chartCard: { alignItems: 'center' },
+  emergencyCard: { gap: 10 },
+  emergencyBar: { height: 10, borderRadius: 5, overflow: 'hidden' },
+  emergencyBarFill: { height: '100%', borderRadius: 5 },
+  emergencyStats: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   legend: { width: '100%', gap: 0, marginTop: 8 },
   legendRow: {
     flexDirection: 'row',

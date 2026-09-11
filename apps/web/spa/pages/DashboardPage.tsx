@@ -17,6 +17,7 @@ import {
 } from '@/lib/peso';
 import { loadDashboard, type WebAccount } from '@/lib/finance';
 import { WalletBalancesRow } from '@/components/WalletBalancesRow';
+import { loadWebEmergencyFund, loadWebSavingsDashboard } from '@/lib/savings';
 
 function StatCard({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: string }) {
   return (
@@ -28,6 +29,11 @@ function StatCard({ label, value, hint, tone }: { label: string; value: string; 
   );
 }
 
+type DashboardModules = {
+  savings: Awaited<ReturnType<typeof loadWebSavingsDashboard>>;
+  emergency: Awaited<ReturnType<typeof loadWebEmergencyFund>>;
+};
+
 export function DashboardPage() {
   const { user } = useAuth();
   const [peso, setPeso] = useState<Awaited<ReturnType<typeof loadWebPesoDashboard>> | null>(null);
@@ -35,6 +41,7 @@ export function DashboardPage() {
   const [alerts, setAlerts] = useState<PesoNotificationAlert[]>([]);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [accounts, setAccounts] = useState<WebAccount[]>([]);
+  const [dashboardModules, setDashboardModules] = useState<DashboardModules | null>(null);
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingForm, setOnboardingForm] = useState({
@@ -55,13 +62,26 @@ export function DashboardPage() {
       fetchNotificationPrefs(user.id),
       loadWebBudgetRows(user.id),
       loadDashboard(user.id),
+      loadWebSavingsDashboard(user.id),
+      loadWebEmergencyFund(user.id),
     ])
-      .then(async ([data, onboarded, prefs, budgets, finance]) => {
+      .then(async ([data, onboarded, prefs, budgets, finance, savings, emergency]) => {
         if (cancelled) return;
         setPeso(data);
         setAccounts(finance.accounts);
         if (!onboarded) setShowOnboarding(true);
-        setAlerts(buildPesoNotificationAlerts(data, prefs, budgets));
+        const goalRows = savings.goals.map((goal) => ({
+          id: goal.id,
+          name: goal.name,
+          status: goal.is_completed ? 'completed' as const : 'on_track' as const,
+          progressPercentage: goal.target_amount > 0 ? Math.min(100, (goal.current_amount / goal.target_amount) * 100) : 0,
+          remainingAmount: Math.max(0, goal.target_amount - goal.current_amount),
+          targetDate: goal.target_date,
+          daysRemaining: null,
+          requiredDaily: 0,
+        }));
+        setAlerts(buildPesoNotificationAlerts(data, prefs, budgets, goalRows));
+        setDashboardModules({ savings, emergency });
         const ai = await fetchWebAiInsight(data);
         if (!cancelled) setInsight(ai);
       })
@@ -112,7 +132,10 @@ export function DashboardPage() {
               AI assistant
             </Link>
             <Link className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold" to="/goals">
-              Goals
+              Savings
+            </Link>
+            <Link className="rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-semibold" to="/emergency-fund">
+              Emergency fund
             </Link>
             <Link className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white dark:text-slate-950" to="/manage">
               Manage finances
@@ -173,6 +196,49 @@ export function DashboardPage() {
               />
               <StatCard label="Financial health" value={`${peso.healthScore.score}/100`} />
             </div>
+
+            {dashboardModules ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Link className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4" to="/goals">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-[var(--muted)]">Savings</p>
+                      <p className="mt-1 text-2xl font-extrabold">
+                        {formatCurrency(dashboardModules.savings.summary.totalSaved)}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[var(--surface-elevated)] px-3 py-1 text-xs font-semibold">
+                      {dashboardModules.savings.summary.overallProgress.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--primary)]"
+                      style={{ width: `${Math.min(100, dashboardModules.savings.summary.overallProgress)}%` }}
+                    />
+                  </div>
+                </Link>
+                <Link className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4" to="/emergency-fund">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase text-[var(--muted)]">Emergency fund</p>
+                      <p className="mt-1 text-2xl font-extrabold">
+                        {formatCurrency(dashboardModules.emergency.summary.currentAmount)}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[var(--surface-elevated)] px-3 py-1 text-xs font-semibold">
+                      {dashboardModules.emergency.summary.monthsCovered.toFixed(1)} mo
+                    </span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-elevated)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--primary)]"
+                      style={{ width: `${Math.min(100, dashboardModules.emergency.summary.progressPercentage)}%` }}
+                    />
+                  </div>
+                </Link>
+              </div>
+            ) : null}
 
             {peso.spendingRisk.detected ? (
               <div className="rounded-2xl border border-amber-400/50 bg-amber-50 p-4 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">

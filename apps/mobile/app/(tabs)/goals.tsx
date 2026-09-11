@@ -30,7 +30,7 @@ export default function GoalsScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
       >
         <View style={styles.header}>
-          <AppText variant="display">My Savings Goals</AppText>
+          <AppText variant="display">Savings</AppText>
           <AppText muted>Track progress toward what matters to you</AppText>
         </View>
 

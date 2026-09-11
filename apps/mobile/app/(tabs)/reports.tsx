@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { router } from 'expo-router';
 import {
   Pressable,
   RefreshControl,
@@ -25,6 +26,8 @@ import { budgetRepository } from '@/database/repositories/budgetRepository';
 import { loanRepository } from '@/database/repositories/loanRepository';
 import { syncNow } from '@/services/syncService';
 import { sendFinanceReportEmail } from '@/services/reportEmailService';
+import { loadEmergencyFund } from '@/services/emergencyFundService';
+import { loadGoalsDashboard } from '@/services/savingsGoalService';
 import {
   Screen,
   Card,
@@ -58,7 +61,7 @@ export default function ReportsScreen() {
     queryKey: ['stats-dashboard', user?.id, period, range.start, range.end],
     enabled: !!user?.id,
     queryFn: async () => {
-      const [balance, totals, spending, trendRows, budgets, loanTotals, txCount, budgetSpend] =
+      const [balance, totals, spending, trendRows, budgets, loanTotals, txCount, budgetSpend, savings, emergency] =
         await Promise.all([
           transactionRepository.getIncomeExpenseBalance(user!.id),
           transactionRepository.getMonthlyTotals(user!.id, range.start, range.end),
@@ -68,6 +71,8 @@ export default function ReportsScreen() {
           loanRepository.totals(user!.id),
           transactionRepository.countAll(user!.id),
           transactionRepository.getBudgetSpendInRange(user!.id, range.start, range.end),
+          loadGoalsDashboard(user!.id),
+          loadEmergencyFund(user!.id),
         ]);
       return {
         balance,
@@ -78,6 +83,8 @@ export default function ReportsScreen() {
         loanTotals,
         txCount,
         budgetSpend,
+        savings,
+        emergency,
       };
     },
   });
@@ -98,6 +105,8 @@ export default function ReportsScreen() {
   const budgets = data?.budgets ?? [];
   const loanTotals = data?.loanTotals ?? { debts: 0, receivables: 0 };
   const budgetSpend = data?.budgetSpend ?? 0;
+  const savings = data?.savings;
+  const emergency = data?.emergency;
   const budgetStats = buildBudgetStats(
     budgets.map((budget) => ({
       id: budget.id,
@@ -201,6 +210,56 @@ export default function ReportsScreen() {
             />
           </View>
 
+          <SectionHeader subtitle="Track-only savings progress" title="Savings and emergency fund" />
+          <View style={styles.moduleGrid}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/goals' as never)}
+              style={[styles.moduleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <AppText muted variant="caption">
+                Savings
+              </AppText>
+              <AppText variant="title">{formatCurrency(savings?.summary.totalSaved ?? 0)}</AppText>
+              <View style={[styles.progressTrack, { backgroundColor: colors.inputBackground }]}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.primary,
+                      width: `${Math.min(100, savings?.summary.overallProgress ?? 0)}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <AppText muted variant="caption">
+                {(savings?.summary.overallProgress ?? 0).toFixed(1)}% of targets
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/emergency-fund' as never)}
+              style={[styles.moduleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <AppText muted variant="caption">
+                Emergency fund
+              </AppText>
+              <AppText variant="title">{formatCurrency(emergency?.summary.currentAmount ?? 0)}</AppText>
+              <View style={[styles.progressTrack, { backgroundColor: colors.inputBackground }]}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.primary,
+                      width: `${Math.min(100, emergency?.summary.progressPercentage ?? 0)}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <AppText muted variant="caption">
+                {(emergency?.summary.monthsCovered ?? 0).toFixed(1)} months covered
+              </AppText>
+            </Pressable>
+          </View>
+
           <SectionHeader
             subtitle={
               period === 'yearly'
@@ -295,6 +354,10 @@ const styles = StyleSheet.create({
   },
   periodLabel: { marginBottom: 8 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  moduleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
+  moduleCard: { flexGrow: 1, minWidth: '47%', borderWidth: 1, borderRadius: 16, padding: 14, gap: 8 },
+  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
   chartCard: { alignItems: 'center' },
   legend: { width: '100%', marginTop: 8 },
   legendRow: {

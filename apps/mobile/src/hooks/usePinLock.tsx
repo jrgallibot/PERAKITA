@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { hasPin } from '@/services/pinLockService';
 import { PinLockScreen } from '@/components/PinLockScreen';
 
@@ -22,8 +22,27 @@ export function PinLockGate({ children }: { children: ReactNode }) {
   }, [pinEnabled]);
 
   if (pinEnabled && locked) {
-    return <PinLockScreen onUnlock={() => setLocked(false)} />;
+    return (
+      <>
+        {children}
+        <View style={styles.overlay}>
+          <PinLockScreen onUnlock={() => setLocked(false)} />
+        </View>
+      </>
+    );
   }
 
   return <>{children}</>;
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 10000,
+    elevation: 10000,
+  },
+});

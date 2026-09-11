@@ -12,6 +12,32 @@ $envFile = Join-Path $scriptRepoRoot '.env'
 $mobileDir = $scriptMobileDir
 $repoRoot = $scriptRepoRoot
 
+if ($env:OS -match 'Windows' -and $env:PERAKITA_ENABLE_SUBST_BUILD -eq '1' -and $env:PERAKITA_SHORT_PATH_BUILD -ne '1') {
+  $driveLetter = @('P', 'Q', 'R', 'S') | Where-Object {
+    -not (Test-Path "$_`:\")
+  } | Select-Object -First 1
+
+  if ($driveLetter) {
+    $drive = "$driveLetter`:"
+    Write-Host "Using short build path $drive for Android native build..." -ForegroundColor Cyan
+    cmd /c "subst $drive `"$scriptRepoRoot`""
+    if ($LASTEXITCODE -eq 0) {
+      try {
+        $env:PERAKITA_SHORT_PATH_BUILD = '1'
+        $env:PERAKITA_REAL_REPO_ROOT = $scriptRepoRoot
+        $env:PERAKITA_SHORT_REPO_ROOT = "$drive\"
+        $shortScript = Join-Path "$drive\" 'apps\mobile\scripts\build-apk.ps1'
+        $args = @('-ExecutionPolicy', 'Bypass', '-File', $shortScript)
+        if ($Clean) { $args += '-Clean' }
+        & powershell @args
+        exit $LASTEXITCODE
+      } finally {
+        cmd /c "subst $drive /D" | Out-Null
+      }
+    }
+  }
+}
+
 function Test-WindowsLongPathsEnabled {
   try {
     $item = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name 'LongPathsEnabled' -ErrorAction SilentlyContinue
@@ -83,7 +109,8 @@ if (-not $androidHome) {
 $env:JAVA_HOME = $javaHome
 $env:ANDROID_HOME = $androidHome
 $env:NODE_ENV = 'production'
-$env:GRADLE_USER_HOME = Join-Path $env:LOCALAPPDATA 'pk-gradle'
+$env:pnpm_config_verify_deps_before_run = 'false'
+$env:GRADLE_USER_HOME = 'D:\g'
 $env:EXPO_NO_METRO_WORKSPACE_ROOT = '1'
 $env:PATH = (Join-Path $javaHome 'bin') + ';' + (Join-Path $androidHome 'platform-tools') + ';' + $env:PATH
 
@@ -95,14 +122,14 @@ function Test-MonorepoGradlePatch {
   param([string]$Path)
   if (-not (Test-Path $Path)) { return $false }
   $content = Get-Content $Path -Raw
-  return ($content -match 'root = file\("\.\./\.\./"\)') -and ($content -match 'resolveEntryPoint')
+  return ($content -match 'root = file\("\.\./\.\./"\)') -and ($content -match 'entryFile = file\("\.\./\.\./index\.js"\)')
 }
 
 function Test-WindowsPathPatch {
   param([string]$Path)
   if (-not (Test-Path $Path)) { return $false }
   $content = Get-Content $Path -Raw
-  return $content -match 'CMAKE_OBJECT_PATH_MAX'
+  return ($content -match 'CMAKE_OBJECT_PATH_MAX') -and ($content -match 'CMAKE_SUPPRESS_REGENERATION') -and ($content -match 'buildStagingDirectory file\("D:/c"\)')
 }
 
 $needsPrebuild = $Clean -or -not (Test-Path (Join-Path $androidDir 'gradlew.bat')) -or -not (Test-MonorepoGradlePatch $appBuildGradle) -or -not (Test-WindowsPathPatch $appBuildGradle)
@@ -121,6 +148,135 @@ if ($needsPrebuild) {
   }
 }
 
+function Add-CMakeSuppressRegenerationArgument {
+  param([string]$AndroidPackageDir)
+
+  $gradleFiles = @(
+    (Join-Path $AndroidPackageDir 'build.gradle'),
+    (Join-Path $AndroidPackageDir 'build.gradle.kts')
+  )
+
+  foreach ($gradleFile in $gradleFiles) {
+    if (-not (Test-Path $gradleFile)) { continue }
+    $content = Get-Content $gradleFile -Raw
+    if ($content -match 'CMAKE_SUPPRESS_REGENERATION') { continue }
+
+    $updated = $content
+    if ($gradleFile.EndsWith('.kts')) {
+      $updated = $updated -replace 'arguments\(\r?\n', "arguments(`r`n            `"-DCMAKE_SUPPRESS_REGENERATION=ON`",`r`n"
+    } else {
+      $updated = $updated -replace 'def cppArguments = \[\r?\n', "def cppArguments = [`r`n          `"-DCMAKE_SUPPRESS_REGENERATION=ON`",`r`n"
+      $updated = $updated -replace 'arguments\(\r?\n', "arguments(`r`n            `"-DCMAKE_SUPPRESS_REGENERATION=ON`",`r`n"
+    }
+
+    if ($updated -ne $content) {
+      Write-Host "Patching CMake regeneration flag in $gradleFile..." -ForegroundColor Cyan
+      Set-Content -Path $gradleFile -Value $updated -NoNewline
+    }
+  }
+}
+
+function Convert-CodegenCMakeGlobsToRelative {
+  param([string]$AndroidPackageDir)
+
+  $cmakeFile = Join-Path $AndroidPackageDir 'src\main\jni\CMakeLists.txt'
+  if (-not (Test-Path $cmakeFile)) { return }
+
+  $content = Get-Content $cmakeFile -Raw
+  $updated = $content -replace 'file\(GLOB ([A-Za-z0-9_]+) CONFIGURE_DEPENDS', 'file(GLOB $1 RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS'
+
+  if ($updated -ne $content) {
+    Write-Host "Patching relative source globs in $cmakeFile..." -ForegroundColor Cyan
+    Set-Content -Path $cmakeFile -Value $updated -NoNewline
+  }
+}
+
+function Set-DirectoryJunction {
+  param(
+    [string]$LinkPath,
+    [string]$TargetPath
+  )
+
+  $root = 'D:\r'
+  if (-not $LinkPath.StartsWith($root)) {
+    throw "Refusing to manage junction outside $root`: $LinkPath"
+  }
+  if (-not (Test-Path $TargetPath)) {
+    throw "Cannot create junction; target does not exist: $TargetPath"
+  }
+  if (-not (Test-Path $root)) {
+    New-Item -ItemType Directory -Path $root | Out-Null
+  }
+
+  if (Test-Path $LinkPath) {
+    $item = Get-Item $LinkPath
+    $currentTarget = if ($item.LinkType -eq 'Junction') { $item.Target[0] } else { $null }
+    if ($currentTarget -eq $TargetPath) { return }
+    if ($item.PSIsContainer) {
+      cmd /c "rmdir `"$LinkPath`"" | Out-Null
+    } else {
+      Remove-Item -Force $LinkPath
+    }
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to remove existing junction $LinkPath"
+    }
+  }
+
+  cmd /c "mklink /J `"$LinkPath`" `"$TargetPath`"" | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to create junction $LinkPath -> $TargetPath"
+  }
+}
+
+function Convert-AutolinkingCMakeToShortPaths {
+  param([string]$Path)
+
+  if (-not (Test-Path $Path)) {
+    throw "Autolinking CMake file was not generated: $Path"
+  }
+
+  $shortNames = @{
+    'RNDateTimePickerCGen_autolinked_build' = 'dt'
+    'RNCNetInfoSpec_autolinked_build' = 'ni'
+    'rngesturehandler_codegen_autolinked_build' = 'gh'
+    'rnreanimated_autolinked_build' = 're'
+    'safeareacontext_autolinked_build' = 'sa'
+    'rnscreens_autolinked_build' = 'sc'
+    'rnsvg_autolinked_build' = 'sv'
+    'rnworklets_autolinked_build' = 'wk'
+  }
+
+  $content = Get-Content $Path -Raw
+  $updated = $content
+
+  foreach ($buildName in $shortNames.Keys) {
+    $pattern = 'add_subdirectory\("([^"]+)" ' + [regex]::Escape($buildName) + '\)'
+    $match = [regex]::Match($updated, $pattern)
+    if (-not $match.Success) { continue }
+
+    $sourcePath = $match.Groups[1].Value
+    if ($sourcePath -notmatch '/node_modules/') { continue }
+
+    $linkPath = Join-Path 'D:\r' $shortNames[$buildName]
+    $shortSourcePath = $linkPath -replace '\\', '/'
+
+    if ($sourcePath.EndsWith('/android/src/main/jni/')) {
+      $packageRoot = $sourcePath.Substring(0, $sourcePath.Length - '/android/src/main/jni/'.Length)
+      Set-DirectoryJunction $linkPath ($packageRoot -replace '/', '\')
+      $shortSourcePath = "$shortSourcePath/android/src/main/jni/"
+    } else {
+      Set-DirectoryJunction $linkPath ($sourcePath -replace '/', '\')
+    }
+
+    $updated = $updated.Replace($sourcePath, $shortSourcePath)
+  }
+
+  if ($updated -ne $content) {
+    Write-Host "Patching short native autolinking paths in $Path..." -ForegroundColor Cyan
+    Set-Content -Path $Path -Value $updated -NoNewline
+  }
+}
+
 $localProps = Join-Path $androidDir 'local.properties'
 if (-not (Test-Path $localProps)) {
   Set-Content -Path $localProps -Value "sdk.dir=$sdkDir"
@@ -132,7 +288,7 @@ if (-not (Test-Path $localProps)) {
 }
 
 $cxxDir = Join-Path $androidDir 'app\.cxx'
-$stagingDir = Join-Path $env:LOCALAPPDATA 'pk-cxx'
+$stagingDir = 'D:\c'
 if ($env:OS -match 'Windows') {
   if (Test-Path $cxxDir) {
     Write-Host 'Clearing native CMake cache (.cxx)...' -ForegroundColor Cyan
@@ -141,12 +297,72 @@ if ($env:OS -match 'Windows') {
   if (Test-Path $stagingDir) {
     Remove-Item -Recurse -Force $stagingDir
   }
+
+  $nativePackages = @(
+    'expo-modules-core',
+    '@react-native-community/datetimepicker',
+    '@react-native-community/netinfo',
+    'react-native-gesture-handler',
+    'react-native-reanimated',
+    'react-native-safe-area-context',
+    'react-native-screens',
+    'react-native-svg',
+    'react-native-worklets'
+  )
+  Push-Location $mobileDir
+  try {
+    foreach ($packageName in $nativePackages) {
+      $packageJson = (& node --print "require.resolve('$packageName/package.json')" 2>$null)
+      if (-not $packageJson) { continue }
+      $packageRoot = Split-Path $packageJson -Parent
+      $packageAndroid = Join-Path $packageRoot 'android'
+      if (Test-Path $packageAndroid) {
+        Add-CMakeSuppressRegenerationArgument $packageAndroid
+        Convert-CodegenCMakeGlobsToRelative $packageAndroid
+      }
+      $packageCxx = Join-Path $packageRoot 'android\.cxx'
+      $resolvedPackageCxx = if (Test-Path $packageCxx) { (Resolve-Path $packageCxx).Path } else { $null }
+      if ($resolvedPackageCxx -and ($resolvedPackageCxx.StartsWith('D:\p\') -or $resolvedPackageCxx.StartsWith('D:\System\PeraKita\p\') -or $resolvedPackageCxx.StartsWith($repoRoot))) {
+        Write-Host "Clearing native CMake cache for $packageName..." -ForegroundColor Cyan
+        Remove-Item -Recurse -Force $resolvedPackageCxx
+      }
+    }
+  } finally {
+    Pop-Location
+  }
+
+  $androidGeneratedDirs = @(
+    (Join-Path $androidDir '.gradle'),
+    (Join-Path $androidDir 'build'),
+    (Join-Path $androidDir 'app\build')
+  )
+  foreach ($generatedDir in $androidGeneratedDirs) {
+    if (-not (Test-Path $generatedDir)) { continue }
+    $resolvedGeneratedDir = (Resolve-Path $generatedDir).Path
+    if (-not $resolvedGeneratedDir.StartsWith($androidDir)) {
+      throw "Refusing to clear generated Android directory outside $androidDir`: $resolvedGeneratedDir"
+    }
+    Write-Host "Clearing generated Android state $resolvedGeneratedDir..." -ForegroundColor Cyan
+    Remove-Item -Recurse -Force $resolvedGeneratedDir
+  }
+
+  Write-Host 'Generating Android autolinking files for short native paths...' -ForegroundColor Cyan
+  Push-Location $androidDir
+  try {
+    & .\gradlew.bat :app:generateAutolinkingNewArchitectureFiles --no-daemon -g D:\g -PreactNativeArchitectures=arm64-v8a
+    if ($LASTEXITCODE -ne 0) {
+      throw "Autolinking generation failed with exit code $LASTEXITCODE"
+    }
+  } finally {
+    Pop-Location
+  }
+  Convert-AutolinkingCMakeToShortPaths (Join-Path $androidDir 'app\build\generated\autolinking\src\main\jni\Android-autolinking.cmake')
 }
 
 Write-Host 'Building release APK with Gradle...'
 Push-Location $androidDir
 try {
-  & .\gradlew.bat assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+  & .\gradlew.bat assembleRelease --no-daemon -g D:\g -PreactNativeArchitectures=arm64-v8a -x :app:generateAutolinkingNewArchitectureFiles
   if ($LASTEXITCODE -ne 0) {
     throw "Gradle build failed with exit code $LASTEXITCODE"
   }

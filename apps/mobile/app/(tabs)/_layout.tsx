@@ -99,9 +99,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="goals"
         options={{
-          title: 'Goals',
+          title: 'Savings',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons color={color} name={focused ? 'flag' : 'flag-outline'} size={size} />
+            <Ionicons color={color} name={focused ? 'wallet' : 'wallet-outline'} size={size} />
           ),
         }}
       />

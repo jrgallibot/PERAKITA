@@ -49,9 +49,15 @@ export function useAuthListener() {
         await initializeDatabase();
         await loadThemePreference();
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const session = await (async () => {
+          if (!isSupabaseConfigured) return null;
+          try {
+            const result = await supabase.auth.getSession();
+            return result.data.session;
+          } catch {
+            return null;
+          }
+        })();
 
         if (!mounted) return;
 

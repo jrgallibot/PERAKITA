@@ -1,7 +1,10 @@
 packages:
   - "apps/*"
   - "packages/*"
-nodeLinker: hoisted
+nodeLinker: isolated
+virtualStoreDir: D:/p
+virtualStoreDirMaxLength: 20
+peersSuffixMaxLength: 8
 allowBuilds:
   esbuild: true
   sharp: true
@@ -10,5 +13,5 @@ minimumReleaseAgeExclude:
   - '@expo/fingerprint@0.20.8'
   - expo-asset@57.0.12
 overrides:
-  react: 19.1.0
-  react-dom: 19.1.0
+  react: 19.2.3
+  react-dom: 19.2.3

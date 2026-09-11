@@ -15,6 +15,7 @@ import { useToast } from '@/components/Toast';
 import { useAuth } from '@/spa/AuthProvider';
 import { loadStatsDashboard, type WebStatsDashboard } from '@/lib/finance';
 import { sendFinanceReportEmail } from '@/lib/reportEmail';
+import { loadWebEmergencyFund, loadWebSavingsDashboard } from '@/lib/savings';
 
 function StatCard({
   label,
@@ -48,6 +49,8 @@ export function ReportsPage() {
   const notify = useToast();
   const [period, setPeriod] = useState<ReportPeriod>('monthly');
   const [stats, setStats] = useState<WebStatsDashboard | null>(null);
+  const [savings, setSavings] = useState<Awaited<ReturnType<typeof loadWebSavingsDashboard>> | null>(null);
+  const [emergency, setEmergency] = useState<Awaited<ReturnType<typeof loadWebEmergencyFund>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [emailing, setEmailing] = useState(false);
@@ -57,9 +60,17 @@ export function ReportsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    loadStatsDashboard(user.id, period)
-      .then((data) => {
-        if (!cancelled) setStats(data);
+    Promise.all([
+      loadStatsDashboard(user.id, period),
+      loadWebSavingsDashboard(user.id),
+      loadWebEmergencyFund(user.id),
+    ])
+      .then(([data, savingsData, emergencyData]) => {
+        if (!cancelled) {
+          setStats(data);
+          setSavings(savingsData);
+          setEmergency(emergencyData);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load reports');
@@ -178,6 +189,48 @@ export function ReportsPage() {
                 label="Budget spend"
                 value={fmt(stats.budgetSpend)}
               />
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              <Link
+                className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-card dark:shadow-card-dark sm:p-6"
+                to="/goals"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold">Savings</h2>
+                    <p className="mt-1 text-sm text-[var(--muted)]">Goal progress and monthly contributions</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--surface-elevated)] px-3 py-1 text-xs font-semibold">
+                    {savings?.summary.overallProgress.toFixed(1) ?? '0.0'}%
+                  </span>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <StatCard label="Saved" tone="income" value={fmt(savings?.summary.totalSaved ?? 0)} />
+                  <StatCard label="Targets" value={fmt(savings?.summary.totalTargets ?? 0)} />
+                  <StatCard label="This month" value={fmt(savings?.summary.monthlyContributions ?? 0)} />
+                </div>
+              </Link>
+
+              <Link
+                className="rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-card dark:shadow-card-dark sm:p-6"
+                to="/emergency-fund"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold">Emergency fund</h2>
+                    <p className="mt-1 text-sm text-[var(--muted)]">Dedicated safety net progress</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--surface-elevated)] px-3 py-1 text-xs font-semibold">
+                    {(emergency?.summary.progressPercentage ?? 0).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <StatCard label="Saved" tone="income" value={fmt(emergency?.summary.currentAmount ?? 0)} />
+                  <StatCard label="Target" value={fmt(emergency?.summary.targetAmount ?? 0)} />
+                  <StatCard label="Months covered" value={(emergency?.summary.monthsCovered ?? 0).toFixed(1)} />
+                </div>
+              </Link>
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">

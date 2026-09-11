@@ -10,7 +10,7 @@ module.exports = function withWindowsAndroidPaths(config) {
         `defaultConfig {
         externalNativeBuild {
             cmake {
-                arguments "-DCMAKE_OBJECT_PATH_MAX=128"
+                arguments "-DCMAKE_OBJECT_PATH_MAX=128", "-DCMAKE_SUPPRESS_REGENERATION=ON"
             }
         }
 `
@@ -23,7 +23,7 @@ module.exports = function withWindowsAndroidPaths(config) {
         `$1    }
     externalNativeBuild {
         cmake {
-            buildStagingDirectory file("\${System.getenv('LOCALAPPDATA')}/pk-cxx")
+            buildStagingDirectory file("D:/c")
         }
     }`
       );
