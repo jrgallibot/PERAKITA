@@ -2,7 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 nodeLinker: isolated
-virtualStoreDir: D:/p
+virtualStoreDir: .pnpm
 virtualStoreDirMaxLength: 20
 peersSuffixMaxLength: 8
 allowBuilds:
